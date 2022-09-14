@@ -5,7 +5,10 @@ import json
 from plumbum import local
 from dbgym.util.plumbum_hack import PlumbumQuoteHack
 
+from dbgym.envs.state import PostgresState
+
 from time import sleep
+import psutil
 
 createdb = local["createdb"]
 createuser = local["createuser"]
@@ -16,14 +19,15 @@ pg_ctlcluster = local["pg_ctlcluster"]
 pg_dropcluster = local["pg_dropcluster"]
 pg_isready = local["pg_isready"]
 pg_lsclusters = local["pg_lsclusters"]
+pg_restore = local["pg_restore"]
 psql = local["psql"]
 sudo = local["sudo"]
 
 
 class Trainer(ABC):
     def __init__(self, gym_spec: GymSpec, seed=15721):
-        self._gym_spec = gym_spec
-        self._seed = seed
+        self._gym_spec: GymSpec = gym_spec
+        self._seed: int = seed
         pass
 
     def get_target_dbms_connstr_sqlalchemy(self) -> str:
@@ -70,11 +74,15 @@ class PostgresTrainer(Trainer):
 
         # Setup DB.
         with local.env(PGPASSWORD=self._db_pass):
-            dropdb["--if-exists", "-U", self._db_user, "-h", self._cluster_host, "-p", self._cluster_port, self._db_name].run_fg()
+            dropdb[
+                "--if-exists", "-U", self._db_user, "-h", self._cluster_host, "-p", self._cluster_port, self._db_name].run_fg()
             createdb["-U", self._db_user, "-h", self._cluster_host, "-p", self._cluster_port, self._db_name].run_fg()
 
         # Run PGTune.
         self._pgtune()
+
+        # Restore state from the spec.
+        self._restore_from_state()
 
     def delete_target_dbms(self):
         sudo[pg_dropcluster["--stop", self._cluster_version, self._cluster_name]].run_fg()
@@ -169,10 +177,30 @@ class PostgresTrainer(Trainer):
         waited_s = 0
         with local.env(PGPASSWORD=self._db_pass):
             while True:
-                retcode, _, _ = pg_isready["-h", self._cluster_host, "-p", self._cluster_port, "-d", self._db_name].run()
+                retcode, _, _ = pg_isready[
+                    "-h", self._cluster_host, "-p", self._cluster_port, "-d", self._db_name].run()
                 if retcode == 0:
                     break
                 sleep(wait_s)
                 waited_s += wait_s
                 if waited_s >= timeout_s:
                     raise RuntimeError("pg_isready failed.")
+
+    def _restore_from_state(self):
+        assert isinstance(self._gym_spec.historical_state, PostgresState), "Invalid state."
+        pg_state: PostgresState = self._gym_spec.historical_state
+
+        with local.env(PGPASSWORD=self._db_pass):
+            pg_restore[
+                "--no-owner",
+                "-h", self._cluster_host,
+                "-p", self._cluster_port,
+                "-U", self._db_user,
+                "-d", self._db_name,
+                "--clean", "--if-exists",
+                "--create",
+                "--exit-on-error",
+                "-j", psutil.cpu_count(logical=True),
+                "--verbose",
+                pg_state._historical_state_path,
+            ].run_fg()

@@ -7,6 +7,7 @@ import pglast
 from sqlalchemy import create_engine, text, insert, Table, Column, Integer, String
 
 from dbgym.util.workload_schema import get_workload_schema
+from dbgym.util.sql import substitute
 
 from pathlib import Path
 
@@ -42,47 +43,6 @@ _PG_LOG_DTYPES = {
     "leader_pid": "Int64",
     "query_id": "Int64",
 }
-
-
-def _substitute(query, params, onerror="raise"):
-    # Consider '$2' -> "abc'def'ghi".
-    # This necessitates the use of a SQL-aware substitution,
-    # even if this is much slower than naive string substitution.
-    new_sql, last_end = [], 0
-    try:
-        tokens = pglast.parser.scan(query)
-    except pglast.parser.ParseError as exc:
-        message = f"Bad query: {query}"
-        if onerror != "ignore":
-            raise ValueError(message)
-        print(message)
-        return ""
-    for token in tokens:
-        token_str = str(query[token.start: token.end + 1])
-        if token.start > last_end:
-            new_sql.append(" ")
-        if token.name == "PARAM":
-            assert token_str.startswith("$")
-            assert token_str[1:].isdigit()
-            if token_str not in params:
-                message = f"Bad query param: {token_str} {query} {params}"
-                if onerror != "ignore":
-                    raise ValueError(message)
-                print(message)
-                return ""
-            pval = params[token_str]
-            try:
-                assert pval[0] == "'" and pval[-1] == "'", "Not quoted?"
-                # Remove quoting if the value looks numeric.
-                pval = str(float(pval[1:-1]))
-            except ValueError:
-                pass
-            new_sql.append(pval)
-        else:
-            new_sql.append(token_str)
-        last_end = token.end + 1
-    new_sql = "".join(new_sql)
-    return new_sql
 
 
 def _read_postgresql_csvlog(pg_csvlog):
@@ -135,7 +95,8 @@ def _read_postgresql_csvlog(pg_csvlog):
 
         with tqdm(desc="Adding minor changes."):
             df["query_template"] = df["query_template"].astype("category")
-            df["elapsed_s"] = df["log_time"].diff().fillna(pd.Timedelta(0)).dt.total_seconds()
+            start_time = df.iloc[0]["log_time"]
+            df["elapsed_s"] = (df["log_time"] - start_time).dt.total_seconds()
 
             stored_columns = {
                 "elapsed_s",
@@ -168,7 +129,7 @@ def _substitute_row(row):
     query, params = row["query_raw"], row["params"]
     if query is pd.NA or query is np.nan:
         return pd.NA
-    return _substitute(str(query), params, onerror="ignore")
+    return substitute(str(query), params, onerror="ignore")
 
 
 def _parse(sql):

@@ -2,13 +2,18 @@ from typing import Optional, Union, List, Tuple, Iterable
 
 import gym
 import numpy as np
+import psutil
 from gym.core import RenderFrame, ActType, ObsType
 from gym import spaces
 from gym.spaces import Space
 
 import random
 from dbgym.envs.gym_spec import GymSpec
+from dbgym.envs.trainer import PostgresTrainer
 
+from sqlalchemy import create_engine
+
+import threading
 
 from plumbum import local, FG, BG
 
@@ -215,6 +220,7 @@ class DbGymEnv(gym.Env):
         assert len(gym_spec.snapshot) == 1, "We only support one schema right now."
         self.action_space = IndexSpace(gym_spec=gym_spec, seed=seed)
         self.observation_space = QPPNetFeatures(gym_spec=gym_spec, seed=seed)
+        self._trainer = PostgresTrainer(gym_spec=self._gym_spec, seed=seed)
 
     def reset(
             self,
@@ -226,7 +232,8 @@ class DbGymEnv(gym.Env):
         self._rng = np.random.default_rng(seed=seed)
         self.action_space.seed(seed)
         self.observation_space.seed(seed)
-
+        self._trainer.delete_target_dbms()
+        self._trainer.create_target_dbms()
         observation, info = self._run_workload()
         return observation, info
 
@@ -236,7 +243,6 @@ class DbGymEnv(gym.Env):
         reward = 0.0
         terminated, truncated = False, False
 
-        # self._gym_spec.historical_workload
         # I need to be able to control individual SQL queries to tag them with explain, for example.
 
         return observation, reward, terminated, truncated, info
@@ -245,6 +251,14 @@ class DbGymEnv(gym.Env):
         pass
 
     def _run_workload(self) -> Tuple[ObsType, dict]:
+        engine = create_engine(
+            self._trainer.get_target_dbms_connstr_sqlalchemy(),
+            pool_size=psutil.cpu_count(logical=False)
+        )
+
+
+
+        raise NotImplementedError
         observation = None
         info = {}
         return observation, info

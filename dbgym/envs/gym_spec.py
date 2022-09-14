@@ -14,24 +14,24 @@ Snapshot = TypedDict("Snapshot", {"schemas": Schema})
 
 
 class GymSpec:
-    def __init__(self, db_connstr, historical_workload=None, historical_state=None, wan=False):
+    def __init__(self, prod_db_connstr, historical_workload=None, historical_state=None, wan=False):
         """
 
         Parameters
         ----------
-        db_connstr : str
+        prod_db_connstr : str
             Connection string to the production DBMS.
             Must be in SQLAlchemy format.
         """
         # Debug flag. Currently, speeds things up.
         self._wan: bool = wan
 
-        self.db_connstr: str = db_connstr
+        self.prod_db_connstr: str = prod_db_connstr
 
         self.historical_workload: Workload = historical_workload
         self.historical_state: State = historical_state
 
-        self._engine: sqlalchemy.engine.Engine = sqlalchemy.create_engine(self.db_connstr)
+        self._engine: sqlalchemy.engine.Engine = sqlalchemy.create_engine(self.prod_db_connstr)
         self._inspector: sqlalchemy.engine.Inspector = sqlalchemy.inspect(self._engine)
 
         self.snapshot: Snapshot = self._snapshot_db()
@@ -98,4 +98,4 @@ class GymSpec:
         return snapshot
 
     def __str__(self):
-        return self.db_connstr
+        return self.prod_db_connstr

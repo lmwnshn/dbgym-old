@@ -11,26 +11,10 @@ DB_PASS="prod_pass"
 BENCHMARK="tpcc"
 ROOT_WD=$(pwd)
 
-# pgtune setup.
-# DB Version: 14
-# OS Type: linux
-# DB Type: mixed
-# Total Memory (RAM): 48 GB
-# Data Storage: ssd
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET max_connections = '100'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET shared_buffers = '12GB'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET effective_cache_size = '36GB'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET maintenance_work_mem = '2GB'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET checkpoint_completion_target = '0.9'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET wal_buffers = '16MB'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET default_statistics_target = '100'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET random_page_cost = '1.1'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET effective_io_concurrency = '200'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET work_mem = '31457kB'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET min_wal_size = '1GB'"
-PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET max_wal_size = '4GB'"
-sudo systemctl restart postgresql
-until PGPASSWORD=${DB_PASS} pg_isready --host=localhost --dbname=${DB_NAME} --username=${DB_USER} ; do sleep 1 ; done
+# User setup.
+sudo -u postgres --login psql -c "drop database if exists ${DB_NAME}"
+sudo -u postgres --login psql -c "drop user if exists ${DB_USER}"
+sudo -u postgres --login psql -c "create user ${DB_USER} with superuser encrypted password '${DB_PASS}'"
 
 rm -rf ./artifact
 rm -rf ./build
@@ -69,6 +53,27 @@ xmlstarlet edit --inplace --update '/parameters/works/work/time' --value "60" ".
 # Database setup.
 PGPASSWORD=${DB_PASS} dropdb --host=localhost --username=${DB_USER} --if-exists ${DB_NAME}
 PGPASSWORD=${DB_PASS} createdb --host=localhost --username=${DB_USER} ${DB_NAME}
+
+# pgtune setup.
+# DB Version: 14
+# OS Type: linux
+# DB Type: mixed
+# Total Memory (RAM): 48 GB
+# Data Storage: ssd
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET max_connections = '100'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET shared_buffers = '12GB'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET effective_cache_size = '36GB'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET maintenance_work_mem = '2GB'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET checkpoint_completion_target = '0.9'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET wal_buffers = '16MB'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET default_statistics_target = '100'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET random_page_cost = '1.1'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET effective_io_concurrency = '200'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET work_mem = '31457kB'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET min_wal_size = '1GB'"
+PGPASSWORD=${DB_PASS} psql --host=localhost --dbname=${DB_NAME} --username=${DB_USER} --command="ALTER SYSTEM SET max_wal_size = '4GB'"
+sudo systemctl restart postgresql
+until PGPASSWORD=${DB_PASS} pg_isready --host=localhost --dbname=${DB_NAME} --username=${DB_USER} ; do sleep 1 ; done
 
 # Load the benchmark.
 cd ./build/benchbase/target/benchbase-postgres

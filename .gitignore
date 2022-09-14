@@ -1,3 +1,5 @@
 .idea
 artifact
 build
+**/*.py[cod]
+**/__pycache__
