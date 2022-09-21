@@ -107,10 +107,11 @@ while True:
     tasks += 1
     template_id, params = work_queue.get()
     sql = f"EXECUTE work_{template_id}{format_params(params)};"
-    print(sql)
     work_queue.task_done()
     if tasks % 5000 == 0:
         print(f"Finished {tasks}.")
 
 end_time = time.time()
 print(end_time - start_time, " elapsed time")
+
+# consider asyncpg in the future for postgres specifically?

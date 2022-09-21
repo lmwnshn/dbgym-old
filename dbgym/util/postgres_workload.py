@@ -1,17 +1,19 @@
+"""
+Convert PostgreSQL query log to workload.db.
+"""
+
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pglast
-
-from sqlalchemy import create_engine, text, insert, Table, Column, Integer, String
-
-from dbgym.util.workload_schema import get_workload_schema
-from dbgym.util.sql import substitute
-
-from pathlib import Path
-
+from sqlalchemy import (Column, Integer, String, Table, create_engine, insert,
+                        text)
 from tqdm import tqdm
+
+from dbgym.util.sql import substitute
+from dbgym.util.workload_schema import get_workload_schema
 
 _PG_LOG_DTYPES = {
     "log_time": str,
@@ -80,7 +82,9 @@ def _read_postgresql_csvlog(pg_csvlog):
 
         with tqdm(desc="Substituting parameters back into query."):
             # TODO(WAN): You _could_ do the hacky thing for queries without $.
-            df["query_subst"] = df[["query_raw", "params"]].apply(_substitute_row, axis=1)
+            df["query_subst"] = df[["query_raw", "params"]].apply(
+                _substitute_row, axis=1
+            )
             df = df.drop(columns=["query_raw", "params"])
         pbar.update(1)
 
@@ -115,7 +119,7 @@ def _extract_params(detail):
     idx = detail.find(prefix)
     if idx == -1:
         return {}
-    parameter_list = detail[idx + len(prefix):]
+    parameter_list = detail[idx + len(prefix) :]
     params = {}
     for pstr in parameter_list.split(", "):
         pnum, pval = pstr.split(" = ")
@@ -138,12 +142,17 @@ def _parse(sql):
     sql = str(sql)
     new_sql, params, last_end = [], [], 0
     for token in pglast.parser.scan(sql):
-        token_str = str(sql[token.start: token.end + 1])
+        token_str = str(sql[token.start : token.end + 1])
         if token.start > last_end:
             new_sql.append(" ")
         if token.name in ["ICONST", "FCONST", "SCONST"]:
             # Integer, float, or string constant.
             new_sql.append("$" + str(len(params) + 1))
+            # HACK: See if you can steal a unary minus from the current template being built up.
+            # Skip -1 because that's going to be a $1 $2 etc. parameter.
+            if new_sql[-2] == "-":
+                del new_sql[-2]
+                token_str = f"-{token_str}"
             # Quote for consistency.
             if token_str[0] != "'" and token_str[-1] != "'":
                 token_str = f"'{token_str}'"
@@ -156,7 +165,9 @@ def _parse(sql):
 
 
 def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
-    assert postgresql_csvlog_path.suffix == ".csv", f"CSVLOG format? {postgresql_csvlog_path}"
+    assert (
+        postgresql_csvlog_path.suffix == ".csv"
+    ), f"CSVLOG format? {postgresql_csvlog_path}"
 
     Path(save_path).unlink(missing_ok=True)
     workload_id = 1
@@ -184,13 +195,18 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
         query_template: template_id
         for template_id, query_template in enumerate(categories, 1)
     }
-    for query_template, template_id in tqdm(templates.items(), total=len(templates), desc="Writing out templates."):
+    for query_template, template_id in tqdm(
+        templates.items(), total=len(templates), desc="Writing out templates."
+    ):
         try_insert("query_template", (template_id, query_template))
-        num_params = len(df[df["query_template"] == query_template].iloc[0]["query_params"])
+        num_params = len(
+            df[df["query_template"] == query_template].iloc[0]["query_params"]
+        )
         if num_params > 0:
             params = [Column(f"param_{i}", String) for i in range(1, num_params + 1)]
             query_template_table = Table(
-                f"template_{template_id}_params", metadata,
+                f"template_{template_id}_params",
+                metadata,
                 Column("id", Integer, primary_key=True),
                 *params,
             )
@@ -198,8 +214,9 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
     try_insert("query_template", batch_threshold=0)
 
     params_count = {}
-    for query_num, (query_template, query_params, elapsed_s) \
-            in enumerate(tqdm(df.itertuples(index=False), total=len(df), desc="Writing out params."), 1):
+    for query_num, (query_template, query_params, elapsed_s) in enumerate(
+        tqdm(df.itertuples(index=False), total=len(df), desc="Writing out params."), 1
+    ):
         template_id = templates[query_template]
 
         params_id = None
@@ -209,7 +226,9 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
             params_table = f"template_{template_id}_params"
             try_insert(params_table, (params_id, *query_params))
 
-        try_insert("workload", (workload_id, query_num, elapsed_s, template_id, params_id))
+        try_insert(
+            "workload", (workload_id, query_num, elapsed_s, template_id, params_id)
+        )
 
     keys = list(insert_batch.keys())
     for key in keys:

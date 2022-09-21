@@ -1,17 +1,24 @@
-from sqlalchemy import Table, Column, MetaData, Integer, String, ForeignKey, Index
+"""
+Defines the format of workload.db.
+"""
+
+from sqlalchemy import (Column, ForeignKey, Index, Integer, MetaData, String,
+                        Table)
 
 
 def get_workload_schema() -> MetaData:
     metadata = MetaData()
 
     query_template = Table(
-        "query_template", metadata,
+        "query_template",
+        metadata,
         Column("id", Integer, primary_key=True),
         Column("template", String, nullable=False),
     )
 
     workload = Table(
-        "workload", metadata,
+        "workload",
+        metadata,
         Column("id", Integer, primary_key=True),
         Column("query_num", Integer, primary_key=True),
         Column("elapsed_s", Integer, nullable=False),

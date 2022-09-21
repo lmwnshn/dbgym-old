@@ -1,7 +1,13 @@
+"""
+Patches around quoting behavior in Plumbum.
+"""
+
 from plumbum.machines import LocalCommand, RemoteCommand
+
 
 class PlumbumQuoteHack:
     """Patches around crazy quoting bugs in plumbum; manually quote instead."""
+
     def __init__(self):
         self._local_quote_level = None
         self._remote_quote_level = None

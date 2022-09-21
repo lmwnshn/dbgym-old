@@ -1,14 +1,13 @@
-from abc import ABC
-from dbgym.envs.gym_spec import GymSpec
-
 import json
-from plumbum import local
-from dbgym.util.plumbum_hack import PlumbumQuoteHack
-
-from dbgym.envs.state import PostgresState
-
+from abc import ABC
 from time import sleep
+
 import psutil
+from plumbum import local
+
+from dbgym.envs.gym_spec import GymSpec
+from dbgym.envs.state import PostgresState
+from dbgym.util.plumbum_hack import PlumbumQuoteHack
 
 createdb = local["createdb"]
 createuser = local["createuser"]
@@ -75,8 +74,24 @@ class PostgresTrainer(Trainer):
         # Setup DB.
         with local.env(PGPASSWORD=self._db_pass):
             dropdb[
-                "--if-exists", "-U", self._db_user, "-h", self._cluster_host, "-p", self._cluster_port, self._db_name].run_fg()
-            createdb["-U", self._db_user, "-h", self._cluster_host, "-p", self._cluster_port, self._db_name].run_fg()
+                "--if-exists",
+                "-U",
+                self._db_user,
+                "-h",
+                self._cluster_host,
+                "-p",
+                self._cluster_port,
+                self._db_name,
+            ].run_fg()
+            createdb[
+                "-U",
+                self._db_user,
+                "-h",
+                self._cluster_host,
+                "-p",
+                self._cluster_port,
+                self._db_name,
+            ].run_fg()
 
         # Run PGTune.
         self._pgtune()
@@ -85,7 +100,9 @@ class PostgresTrainer(Trainer):
         self._restore_from_state()
 
     def delete_target_dbms(self):
-        sudo[pg_dropcluster["--stop", self._cluster_version, self._cluster_name]].run_fg()
+        sudo[
+            pg_dropcluster["--stop", self._cluster_version, self._cluster_name]
+        ].run_fg()
 
     def _start_target_dbms(self):
         sudo[pg_ctlcluster[self._cluster_version, self._cluster_name, "start"]].run_fg()
@@ -96,7 +113,9 @@ class PostgresTrainer(Trainer):
         self._wait_until_ready()
 
     def _restart_target_dbms(self):
-        sudo[pg_ctlcluster[self._cluster_version, self._cluster_name, "restart"]].run_fg()
+        sudo[
+            pg_ctlcluster[self._cluster_version, self._cluster_name, "restart"]
+        ].run_fg()
         self._wait_until_ready()
 
     def _create_cluster(self):
@@ -116,24 +135,33 @@ class PostgresTrainer(Trainer):
         retcode, stdout, _ = pg_lsclusters["-j"].run()
         assert retcode == 0, "Couldn't list existing clusters."
         clusters = json.loads(stdout)
-        cluster_exists = any([cluster["cluster"] == "gymcluster" for cluster in clusters])
+        cluster_exists = any(
+            [cluster["cluster"] == "gymcluster" for cluster in clusters]
+        )
         return cluster_exists
 
     def _run_sql(self, sql, as_postgres=False):
         if as_postgres:
             psql_command = psql[
-                "-p", self._cluster_port,
-                "-c", sql,
+                "-p",
+                self._cluster_port,
+                "-c",
+                sql,
             ]
             sudo["-u", "postgres", "--login", psql_command].run_fg()
         else:
             with local.env(PGPASSWORD=self._db_pass):
                 psql_command = psql[
-                    "-p", self._cluster_port,
-                    "-h", self._cluster_host,
-                    "-U", self._db_user,
-                    "-d", self._db_name,
-                    "-c", sql,
+                    "-p",
+                    self._cluster_port,
+                    "-h",
+                    self._cluster_host,
+                    "-U",
+                    self._db_user,
+                    "-d",
+                    self._db_name,
+                    "-c",
+                    sql,
                 ]
                 psql_command.run_fg()
 
@@ -178,7 +206,13 @@ class PostgresTrainer(Trainer):
         with local.env(PGPASSWORD=self._db_pass):
             while True:
                 retcode, _, _ = pg_isready[
-                    "-h", self._cluster_host, "-p", self._cluster_port, "-d", self._db_name].run()
+                    "-h",
+                    self._cluster_host,
+                    "-p",
+                    self._cluster_port,
+                    "-d",
+                    self._db_name,
+                ].run()
                 if retcode == 0:
                     break
                 sleep(wait_s)
@@ -187,20 +221,30 @@ class PostgresTrainer(Trainer):
                     raise RuntimeError("pg_isready failed.")
 
     def _restore_from_state(self):
-        assert isinstance(self._gym_spec.historical_state, PostgresState), "Invalid state."
+        assert isinstance(
+            self._gym_spec.historical_state, PostgresState
+        ), "Invalid state."
         pg_state: PostgresState = self._gym_spec.historical_state
 
         with local.env(PGPASSWORD=self._db_pass):
             pg_restore[
                 "--no-owner",
-                "-h", self._cluster_host,
-                "-p", self._cluster_port,
-                "-U", self._db_user,
-                "-d", self._db_name,
-                "--clean", "--if-exists",
-                "--create",
+                "-h",
+                self._cluster_host,
+                "-p",
+                self._cluster_port,
+                "-U",
+                self._db_user,
+                "-d",
+                self._db_name,
+                "--clean",
+                "--if-exists",
+                # Leaving this here to note that YOU DO NOT WANT THE CREATE OPTION.
+                # Otherwise, it won't restore into the right database.
+                # "--create",
                 "--exit-on-error",
-                "-j", psutil.cpu_count(logical=True),
+                "-j",
+                psutil.cpu_count(logical=True),
                 "--verbose",
                 pg_state._historical_state_path,
             ].run_fg()
