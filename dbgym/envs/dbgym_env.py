@@ -14,6 +14,8 @@ from dbgym.envs.trainer import PostgresTrainer
 from sqlalchemy.pool import NullPool
 from sqlalchemy.engine import create_engine
 
+import time
+
 class DbGymEnv(gym.Env):
     def __init__(self, gym_spec: GymSpec, seed=15721):
         self._rng = np.random.default_rng(seed=seed)
@@ -37,6 +39,7 @@ class DbGymEnv(gym.Env):
         self._trainer.delete_target_dbms()
         self._trainer.create_target_dbms()
         observation, info = self._run_workload()
+        print("_reset finished at ", time.time())
         return observation, info
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, dict]:
@@ -44,11 +47,7 @@ class DbGymEnv(gym.Env):
         observation, info = self._run_workload()
         reward = 0.0
         terminated, truncated = True, False
-        # I need to be able to control individual SQL queries to tag them with explain, for example.
         return observation, reward, terminated, truncated, info
-
-    def _setup_target_DBMS(self):
-        pass
 
     def _run_workload(self) -> Tuple[ObsType, dict]:
         engine = create_engine(
@@ -56,4 +55,5 @@ class DbGymEnv(gym.Env):
         )
         workload_db_path = self._gym_spec.historical_workload._workload_path
         observation, info = self._runner.run(workload_db_path, engine, self.observation_space)
+        print("_run_workload finished at ", time.time())
         return observation, info

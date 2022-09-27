@@ -19,18 +19,21 @@ from dbgym.spaces.qppnet import QPPNetFeatures
 
 from tqdm import tqdm
 
+import pandas as pd
+import numpy as np
+
 
 class Work(ABC):
     def __init__(self, sql_keyword: str):
         self.sql_keyword = sql_keyword.lower()
 
-    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> CursorResult:
+    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> (CursorResult, bool):
         raise NotImplementedError
 
     def try_add_prefix(self, sql_prefix, sql):
         if self.sql_keyword not in ["delete", "insert", "select", "update"] or sql_prefix is None:
-            return sql
-        return f"{sql_prefix} {sql}"
+            return sql, False
+        return f"{sql_prefix} {sql}", True
 
 
 class WorkQueryString(Work):
@@ -41,9 +44,9 @@ class WorkQueryString(Work):
     def __str__(self):
         return f"WQS[{self.query}]"
 
-    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> CursorResult:
-        sql = self.try_add_prefix(sql_prefix, self.query)
-        return conn.execute(sql)
+    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> (CursorResult, bool):
+        sql, prefixed = self.try_add_prefix(sql_prefix, self.query)
+        return conn.execute(sql), prefixed
 
 
 class WorkQueryPrepare(Work):
@@ -55,10 +58,10 @@ class WorkQueryPrepare(Work):
     def __str__(self):
         return f"WQP[{self.template_id}, {self.params}]"
 
-    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> CursorResult:
+    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> (CursorResult, bool):
         sql = f"EXECUTE work_{self.template_id}{self._format_params(self.params)}"
-        sql = self.try_add_prefix(sql_prefix, sql)
-        return conn.execute(sql)
+        sql, prefixed = self.try_add_prefix(sql_prefix, sql)
+        return conn.execute(sql), prefixed
 
     def _format_params(self, params: Optional[tuple]) -> str:
         if params is None:
@@ -257,7 +260,7 @@ class WorkloadRunner:
             sql_prefix = "EXPLAIN (ANALYZE, FORMAT JSON, VERBOSE) "
 
         with engine.connect(close_with_result=False).execution_options(autocommit=False) as conn:
-            observations, info = None, {}
+            observations, info = [], {}
             # Start a worker thread.
             prepare_queue = Queue()
             work_queue: Queue[Work] = Queue()
@@ -305,6 +308,8 @@ class WorkloadRunner:
             okay = 0
             errors = 0
             start_time = time.time()
+            current_query_num = 1
+            current_observation_idx = 0
             max_query_num = prepare_queue.get()
             with tqdm(total=max_query_num) as pbar:
                 while True:
@@ -312,18 +317,29 @@ class WorkloadRunner:
                         break
                     work = work_queue.get()
                     try:
-                        results = work.execute(conn, sql_prefix)
+                        results, prefix_success = work.execute(conn, sql_prefix)
                         if results.returns_rows:
                             results = results.fetchall()
+                            if isinstance(obs_space, QPPNetFeatures) and prefix_success:
+                                # observations is a [query_plan] where query_plan = [plan_features_and_time],
+                                # i.e., [[plan_features_and_time]]
+                                assert len(results) == 1, "Multi-query SQL?"
+                                assert len(results[0]) == 1, "Multi-column result for EXPLAIN?"
+                                result_dicts = results[0][0]
+                                for result_dict in result_dicts:
+                                    new_observations = obs_space.generate(result_dict, current_query_num, current_observation_idx)
+                                    current_observation_idx += len(new_observations)
+                                    observations.extend(new_observations)
                         okay += 1
                     except SQLAlchemyError as e:
                         print(f"WARNING: error executing {work}, error: {e}")
                         errors += 1
+                    current_query_num += 1
                     work_queue.task_done()
                     pbar.update()
 
             submission_thread.join()
             end_time = time.time()
             print(f"Execute [err {errors}, ok {okay}]: {end_time - start_time:.3f}s")
-
+            print("Execute finished at ", time.time())
             return observations, info

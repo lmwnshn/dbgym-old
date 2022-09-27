@@ -73,9 +73,14 @@ class GymSpec:
                 table_attr["columns"]: list[Column] = self._inspector.get_columns(
                     table_name, schema_name
                 )
-                table_attr["indexes"]: list[Index] = self._inspector.get_indexes(
-                    table_name
-                )
+
+                # Unfortunately, get_indexes() doesn't include pkey.
+                pkey = self._inspector.get_pk_constraint(table_name, schema_name)
+                pkey["column_names"] = pkey["constrained_columns"]
+                del pkey["constrained_columns"]
+                pkey["unique"] = True
+                indexes = [pkey] + self._inspector.get_indexes(table_name, schema_name)
+                table_attr["indexes"]: list[Index] = indexes
 
                 column_names = [column["name"] for column in table_attr["columns"]]
 
