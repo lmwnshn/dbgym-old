@@ -386,7 +386,9 @@ class QPPNetFeatures(spaces.Sequence):
         for cat in [
             "Query Hash",
         ]:
-            df[cat] = df[cat].apply(tuple).astype("category")
+            df[cat] = df[cat].apply(
+                tuple
+            )  # .astype("category") # pending pyarrow support for nested dicts
 
         # Defragment the df.
         df = df.copy()

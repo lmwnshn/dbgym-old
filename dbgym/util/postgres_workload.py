@@ -8,8 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pglast
-from sqlalchemy import (Column, Integer, String, Table, create_engine, insert,
-                        text)
+from sqlalchemy import Column, Integer, String, Table, create_engine, insert, text
 from tqdm import tqdm
 
 from dbgym.util.sql import substitute

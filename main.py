@@ -43,8 +43,8 @@ if isinstance(env.observation_space, QPPNetFeatures):
     query_nums = sorted(df["Query Num"].unique())
     midpoint = query_nums[len(query_nums) // 2]
     train_df, test_df = df[df["Query Num"] <= midpoint], df[df["Query Num"] > midpoint]
-    model = QPPNet(train_df, test_df, save_folder=model_path, batch_size=1024)
-    model.train(epoch_save_interval=100)
+    model = QPPNet(train_df, test_df, save_folder=model_path, batch_size=512, num_epochs=25000)
+    model.train(epoch_save_interval=1000, evaluate_on_save=True)
 # breakpoint()
 #
 # # Train a model from these observations.

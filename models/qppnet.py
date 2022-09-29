@@ -79,7 +79,7 @@ class QPPNet:
             self._optimizers[neural_unit_id] = optimizer
             self._schedulers[neural_unit_id] = scheduler
 
-    def train(self, num_epochs=None, force_stratify=True, epoch_save_interval=None):
+    def train(self, num_epochs=None, force_stratify=True, epoch_save_interval=None, evaluate_on_save=False):
         df = self._train_df
 
         num_epochs = self._num_epochs if num_epochs is None else num_epochs
@@ -193,12 +193,10 @@ class QPPNet:
             pbar.close()
 
             if (epoch_save_interval is not None) and (epoch % epoch_save_interval == 0):
-                evaluate_df = self.evaluate(leave_tqdm=False)
-                rmse, rel_err, mae, rq = self.compute_metrics(evaluate_df)
-                suffix = (
-                    f"rmse_{rmse:.4f}_relerr_{rel_err:.4f}_mae_{mae:.4f}rq_{rq:.4f}]"
-                )
-                self.save_weights(epoch, suffix)
+                self.save_weights(epoch)
+                if evaluate_on_save:
+                    evaluate_df = self.evaluate(leave_tqdm=False)
+                    evaluate_df.to_parquet(f"evaluate_epoch_{epoch}.parquet")
 
     def evaluate(self, leave_tqdm=True):
         with torch.no_grad():
@@ -264,20 +262,19 @@ class QPPNet:
             }
         )
 
-    def save_weights(self, epoch: int, model_suffix: str):
+    def save_weights(self, epoch: int):
         for neural_unit_id, neural_unit in self._neural_units.items():
             node_type, num_children = neural_unit_id
-            filename = f"id_{node_type}-{num_children}_epoch_{epoch}_{model_suffix}.pth"
+            filename = f"id_{node_type}-{num_children}_epoch_{epoch}.pth"
             path = self._save_folder / filename
             torch.save(neural_unit.state_dict(), path)
 
     def load_weights(self, epoch: int):
         for neural_unit_id in self._neural_units.keys():
             node_type, num_children = neural_unit_id
-            filename = f"id_{node_type}-{num_children}_epoch_{epoch}*.pth"
-            matching_files = list(self._save_folder.glob(filename))
-            assert len(matching_files) == 1
-            state_dict = torch.load(matching_files[0])
+            filename = f"id_{node_type}-{num_children}_epoch_{epoch}.pth"
+            path = self._save_folder / filename
+            state_dict = torch.load(path)
             self._neural_units[neural_unit_id].load_state_dict(state_dict)
 
     @staticmethod
