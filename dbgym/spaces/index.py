@@ -1,9 +1,10 @@
-from gym import spaces
-from dbgym.envs.gym_spec import GymSpec
+import random
+from typing import Optional
 
 import numpy as np
-from typing import Optional
-import random
+from gym import spaces
+
+from dbgym.envs.gym_spec import GymSpec
 
 # An index is a vertex of a hypercube. Hypercubes!!!!!!
 

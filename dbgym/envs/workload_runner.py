@@ -1,37 +1,39 @@
-import psutil
-import time
 import threading
-
+import time
 from abc import ABC
 from pathlib import Path
 from queue import Queue
+from typing import Optional
 
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import create_engine
-from sqlalchemy.pool import SingletonThreadPool
-from sqlalchemy.engine import Connection, CursorResult, Engine
+import numpy as np
+import pandas as pd
+import psutil
 from gym.core import ObsType
 from gym.spaces import Space
-
-from typing import Optional
-from dbgym.util.sql import substitute
-from dbgym.spaces.qppnet import QPPNetFeatures
-
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Connection, CursorResult, Engine
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import SingletonThreadPool
 from tqdm import tqdm
 
-import pandas as pd
-import numpy as np
+from dbgym.spaces.qppnet import QPPNetFeatures
+from dbgym.util.sql import substitute
 
 
 class Work(ABC):
     def __init__(self, sql_keyword: str):
         self.sql_keyword = sql_keyword.lower()
 
-    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> (CursorResult, bool):
+    def execute(
+        self, conn: Connection, sql_prefix: Optional[str] = None
+    ) -> (CursorResult, bool):
         raise NotImplementedError
 
     def try_add_prefix(self, sql_prefix, sql):
-        if self.sql_keyword not in ["delete", "insert", "select", "update"] or sql_prefix is None:
+        if (
+            self.sql_keyword not in ["delete", "insert", "select", "update"]
+            or sql_prefix is None
+        ):
             return sql, False
         return f"{sql_prefix} {sql}", True
 
@@ -44,7 +46,9 @@ class WorkQueryString(Work):
     def __str__(self):
         return f"WQS[{self.query}]"
 
-    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> (CursorResult, bool):
+    def execute(
+        self, conn: Connection, sql_prefix: Optional[str] = None
+    ) -> (CursorResult, bool):
         sql, prefixed = self.try_add_prefix(sql_prefix, self.query)
         return conn.execute(sql), prefixed
 
@@ -58,7 +62,9 @@ class WorkQueryPrepare(Work):
     def __str__(self):
         return f"WQP[{self.template_id}, {self.params}]"
 
-    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> (CursorResult, bool):
+    def execute(
+        self, conn: Connection, sql_prefix: Optional[str] = None
+    ) -> (CursorResult, bool):
         sql = f"EXECUTE work_{self.template_id}{self._format_params(self.params)}"
         sql, prefixed = self.try_add_prefix(sql_prefix, sql)
         return conn.execute(sql), prefixed
@@ -85,13 +91,20 @@ def _should_prepare(template):
     ]
     template = template.strip().lower()
     do_not_prepare = template in matches
-    do_not_prepare = do_not_prepare or any(template.startswith(prefix) for prefix in startswith)
+    do_not_prepare = do_not_prepare or any(
+        template.startswith(prefix) for prefix in startswith
+    )
     do_not_prepare = do_not_prepare or any(substr in template for substr in contains)
     return not do_not_prepare
 
 
-def _generate_work(prepare_types: dict[int, list[str]], all_templates: dict[int, str],
-                   incompatible_templates: dict[int, str], template_id: int, params: tuple = None):
+def _generate_work(
+    prepare_types: dict[int, list[str]],
+    all_templates: dict[int, str],
+    incompatible_templates: dict[int, str],
+    template_id: int,
+    params: tuple = None,
+):
     if template_id in prepare_types and params is not None:
         new_params = []
         types = prepare_types[template_id]
@@ -139,9 +152,13 @@ def _generate_work(prepare_types: dict[int, list[str]], all_templates: dict[int,
 
 
 def _submission_worker(
-        workload_db_path,
-        prepare_queue, prepare_types_queue, work_queue,
-        prepare_event, prepare_types_event, done_event,
+    workload_db_path,
+    prepare_queue,
+    prepare_types_queue,
+    work_queue,
+    prepare_event,
+    prepare_types_event,
+    done_event,
 ):
     # Submit work to the queues.
 
@@ -152,9 +169,7 @@ def _submission_worker(
         pool_size=psutil.cpu_count(),
     )
     # TODO(WAN): Figure out the semantics of elapsed_s. Do we care? Or replay goes brr?
-    max_query_num = engine.execute(
-        "select max(query_num) from workload"
-    ).fetchone()[0]
+    max_query_num = engine.execute("select max(query_num) from workload").fetchone()[0]
 
     # PREPARE any templates that can be prepared.
     all_templates: dict[int, str] = {}
@@ -214,7 +229,16 @@ def _submission_worker(
             )
             results = engine.execute(sql).fetchall()
             results = [
-                (qnum, _generate_work(prepare_types, all_templates, incompatible_templates, template_id, params=None))
+                (
+                    qnum,
+                    _generate_work(
+                        prepare_types,
+                        all_templates,
+                        incompatible_templates,
+                        template_id,
+                        params=None,
+                    ),
+                )
                 for qnum, template_id in results
             ]
             all_results.extend(results)
@@ -231,7 +255,16 @@ def _submission_worker(
             )
             results = engine.execute(sql).fetchall()
             results = [
-                (qnum, _generate_work(prepare_types, all_templates, incompatible_templates, template_id, params=params))
+                (
+                    qnum,
+                    _generate_work(
+                        prepare_types,
+                        all_templates,
+                        incompatible_templates,
+                        template_id,
+                        params=params,
+                    ),
+                )
                 for qnum, template_id, params_id, *params in results
             ]
             all_results.extend(results)
@@ -242,7 +275,6 @@ def _submission_worker(
         for query_num, work in all_results:
             work_queue.put(work)
 
-        print(f"WORKER {cur_query_num},{cur_query_num + tick_query_num} {time.time():.2f}")
         cur_query_num = cur_query_num + tick_query_num
         tick_query_num = max(tick_query_num, 500000)
         if cur_query_num >= max_query_num:
@@ -254,12 +286,16 @@ class WorkloadRunner:
     def __init__(self):
         pass
 
-    def run(self, workload_db_path: Path, engine: Engine, obs_space: Space) -> tuple[ObsType, dict]:
+    def run(
+        self, workload_db_path: Path, engine: Engine, obs_space: Space
+    ) -> tuple[ObsType, dict]:
         sql_prefix = None
         if isinstance(obs_space, QPPNetFeatures):
             sql_prefix = "EXPLAIN (ANALYZE, FORMAT JSON, VERBOSE) "
 
-        with engine.connect(close_with_result=False).execution_options(autocommit=False) as conn:
+        with engine.connect(close_with_result=False).execution_options(
+            autocommit=False
+        ) as conn:
             observations, info = [], {}
             # Start a worker thread.
             prepare_queue = Queue()
@@ -272,8 +308,12 @@ class WorkloadRunner:
                 target=_submission_worker,
                 args=(
                     workload_db_path,
-                    prepare_queue, prepare_types_queue, work_queue,
-                    prepare_event, prepare_types_event, done_event,
+                    prepare_queue,
+                    prepare_types_queue,
+                    work_queue,
+                    prepare_event,
+                    prepare_types_event,
+                    done_event,
                 ),
             )
             submission_thread.start()
@@ -297,7 +337,9 @@ class WorkloadRunner:
                 name, types = result
                 prefix, template_id = name.split("_")
                 assert prefix == "work", f"What prepared statements got added? {result}"
-                assert types.startswith("{") and types.endswith("}"), f"Did they change the format? {types}"
+                assert types.startswith("{") and types.endswith(
+                    "}"
+                ), f"Did they change the format? {types}"
                 template_id = int(template_id)
                 types = types[1:-1].split(",")
                 prepare_types_queue.put((template_id, types))
@@ -324,10 +366,16 @@ class WorkloadRunner:
                                 # observations is a [query_plan] where query_plan = [plan_features_and_time],
                                 # i.e., [[plan_features_and_time]]
                                 assert len(results) == 1, "Multi-query SQL?"
-                                assert len(results[0]) == 1, "Multi-column result for EXPLAIN?"
+                                assert (
+                                    len(results[0]) == 1
+                                ), "Multi-column result for EXPLAIN?"
                                 result_dicts = results[0][0]
                                 for result_dict in result_dicts:
-                                    new_observations = obs_space.generate(result_dict, current_query_num, current_observation_idx)
+                                    new_observations = obs_space.generate(
+                                        result_dict,
+                                        current_query_num,
+                                        current_observation_idx,
+                                    )
                                     current_observation_idx += len(new_observations)
                                     observations.extend(new_observations)
                         okay += 1
@@ -341,5 +389,4 @@ class WorkloadRunner:
             submission_thread.join()
             end_time = time.time()
             print(f"Execute [err {errors}, ok {okay}]: {end_time - start_time:.3f}s")
-            print("Execute finished at ", time.time())
             return observations, info
