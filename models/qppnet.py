@@ -1,9 +1,18 @@
+"""
+TODO(WAN): docs
+
+Based off rabbit721's QPPNet implementation
+https://github.com/rabbit721/QPPNet
+"""
+
+from pathlib import Path
 from typing import TypeAlias
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+from sklearn.model_selection import train_test_split
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import StepLR
 from tqdm import tqdm
@@ -33,16 +42,19 @@ _PAPER_BATCH_SIZE = None
 class QPPNet:
     def __init__(
         self,
-        train_df,
-        test_df,
-        batch_size=_PAPER_BATCH_SIZE,
-        num_epochs=_PAPER_NUM_EPOCHS,
+        train_df: pd.DataFrame,
+        test_df: pd.DataFrame,
+        save_folder: Path,
+        batch_size: int = _PAPER_BATCH_SIZE,
+        num_epochs: int = _PAPER_NUM_EPOCHS,
     ):
-        self._train_df = train_df
-        self._test_df = test_df
+        self._train_df: pd.DataFrame = train_df
+        self._test_df: pd.DataFrame = test_df
+        self._save_folder = save_folder
 
         self._batch_size = batch_size
         self._num_epochs = num_epochs
+        self._random_state = np.random.RandomState(15721)
 
         # Compute dimensions.
         self._dim_dict = self._compute_dim_dict(
@@ -67,12 +79,12 @@ class QPPNet:
             self._optimizers[neural_unit_id] = optimizer
             self._schedulers[neural_unit_id] = scheduler
 
-    def train(self, num_epochs=None):
+    def train(self, num_epochs=None, force_stratify=True, epoch_save_interval=None):
         df = self._train_df
 
         num_epochs = self._num_epochs if num_epochs is None else num_epochs
-        for _ in tqdm(
-            range(num_epochs),
+        for epoch in tqdm(
+            range(1, num_epochs + 1),
             desc=f"Training QPPNet for {num_epochs} epochs.",
         ):
             # From the paper:
@@ -85,6 +97,20 @@ class QPPNet:
             # Instead, it takes full passes over all the training queries.
             if self._batch_size is None:
                 batch = df
+            elif force_stratify:
+                sizes = df.groupby("Query Hash").size()
+                must_take = df[df["Query Hash"].isin(sizes[sizes == 1].keys())].index
+                remaining = df[~df.index.isin(must_take)]
+                train, _ = train_test_split(
+                    remaining,
+                    train_size=self._batch_size,
+                    random_state=self._random_state,
+                    stratify=remaining["Query Hash"],
+                )
+                query_nums = pd.concat([train, df.iloc[must_take]])[
+                    "Query Num"
+                ].unique()
+                batch = df[df["Query Num"].isin(query_nums)]
             else:
                 randomly_sampled_query_plans = np.random.choice(
                     df["Query Num"].unique(), size=self._batch_size, replace=False
@@ -166,13 +192,22 @@ class QPPNet:
                 pbar.update()
             pbar.close()
 
-    def evaluate(self):
+            if (epoch_save_interval is not None) and (epoch % epoch_save_interval == 0):
+                evaluate_df = self.evaluate(leave_tqdm=False)
+                rmse, rel_err, mae, rq = self.compute_metrics(evaluate_df)
+                suffix = (
+                    f"rmse_{rmse:.4f}_relerr_{rel_err:.4f}_mae_{mae:.4f}rq_{rq:.4f}]"
+                )
+                self.save_weights(epoch, suffix)
+
+    def evaluate(self, leave_tqdm=True):
         with torch.no_grad():
             df = self._test_df
             equivalence_classes = df.groupby("Query Hash")
 
             pbar = tqdm(
                 total=len(df),
+                leave=leave_tqdm,
                 desc="Computing evaluation metrics.",
             )
 
@@ -229,6 +264,22 @@ class QPPNet:
             }
         )
 
+    def save_weights(self, epoch: int, model_suffix: str):
+        for neural_unit_id, neural_unit in self._neural_units.items():
+            node_type, num_children = neural_unit_id
+            filename = f"id_{node_type}-{num_children}_epoch_{epoch}_{model_suffix}.pth"
+            path = self._save_folder / filename
+            torch.save(neural_unit.state_dict(), path)
+
+    def load_weights(self, epoch: int):
+        for neural_unit_id in self._neural_units.keys():
+            node_type, num_children = neural_unit_id
+            filename = f"id_{node_type}-{num_children}_epoch_{epoch}*.pth"
+            matching_files = list(self._save_folder.glob(filename))
+            assert len(matching_files) == 1
+            state_dict = torch.load(matching_files[0])
+            self._neural_units[neural_unit_id].load_state_dict(state_dict)
+
     @staticmethod
     def compute_metrics(evaluate_df):
         rmse = QPPNet.calculate_root_mean_square_error(evaluate_df)
@@ -282,7 +333,7 @@ class QPPNet:
         return pd.concat([a, b], axis=1).max(axis=1).max()
 
     @staticmethod
-    def _compute_dim_dict(df):
+    def _compute_dim_dict(df: pd.DataFrame) -> dict[NeuralUnitId, int]:
         dim_dict = {}
         for node_type, num_children, feature_len in zip(
             df["Node Type"],

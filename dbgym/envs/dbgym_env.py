@@ -11,7 +11,7 @@ from dbgym.envs.gym_spec import GymSpec
 from dbgym.envs.trainer import PostgresTrainer
 from dbgym.envs.workload_runner import WorkloadRunner
 from dbgym.spaces.index import IndexSpace
-from dbgym.spaces.qppnet import QPPNetFeatures
+from dbgym.spaces.qppnet_features import QPPNetFeatures
 
 
 class DbGymEnv(gym.Env):

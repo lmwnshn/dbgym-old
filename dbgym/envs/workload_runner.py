@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import SingletonThreadPool
 from tqdm import tqdm
 
-from dbgym.spaces.qppnet import QPPNetFeatures
+from dbgym.spaces.qppnet_features import QPPNetFeatures
 from dbgym.util.sql import substitute
 
 
