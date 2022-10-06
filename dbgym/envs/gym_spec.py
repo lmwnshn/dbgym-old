@@ -1,6 +1,6 @@
-from typing import TypedDict
+from typing import Optional, TypedDict
 
-import sqlalchemy
+from sqlalchemy.engine import Engine, Inspector
 
 from dbgym.envs.state import State
 from dbgym.envs.workload import Workload
@@ -21,65 +21,53 @@ Snapshot = TypedDict("Snapshot", {"schemas": Schema})
 class GymSpec:
     def __init__(
         self,
-        prod_db_connstr,
-        historical_workload=None,
-        historical_state=None,
+        historical_workloads: list[Workload],
+        historical_state: State,
         wan=False,
     ):
-        """
-
-        Parameters
-        ----------
-        prod_db_connstr : str
-            Connection string to the production DBMS.
-            Must be in SQLAlchemy format.
-        """
         # Debug flag. Currently, speeds things up.
         self._wan: bool = wan
 
-        self.prod_db_connstr: str = prod_db_connstr
-
-        self.historical_workload: Workload = historical_workload
+        self.historical_workloads: list[Workload] = historical_workloads
         self.historical_state: State = historical_state
 
-        self._engine: sqlalchemy.engine.Engine = sqlalchemy.create_engine(
-            self.prod_db_connstr
-        )
-        self._inspector: sqlalchemy.engine.Inspector = sqlalchemy.inspect(self._engine)
+        # These should be set on the first restore of the historical state.
+        self.snapshot: Optional[Snapshot] = None
+        self.schema_summary = None
 
-        self.snapshot: Snapshot = self._snapshot_db()
-
+    def snapshot_db(self, engine: Engine, inspector: Inspector):
+        self.snapshot = self._snapshot_db(engine, inspector)
         self.schema_summary = [
             (schema_name, table_name, self.snapshot["schemas"][schema_name][table_name])
             for schema_name in self.snapshot["schemas"]
             for table_name in self.snapshot["schemas"][schema_name]
         ]
 
-    def _snapshot_db(self):
+    def _snapshot_db(self, engine: Engine, inspector: Inspector):
         """Take a snapshot of the current DB state."""
         schemas: Schema = {}
-        for schema_name in self._inspector.get_schema_names():
+        for schema_name in inspector.get_schema_names():
             if schema_name == "information_schema":
                 # We're not tuning this.
                 continue
             schemas[schema_name]: Tables = {}
-            for (table_name, fkcs) in self._inspector.get_sorted_table_and_fkc_names(
+            for (table_name, fkcs) in inspector.get_sorted_table_and_fkc_names(
                 schema_name
             ):
                 if table_name is None:
                     # The last iteration consists of FKs that would require a separate CREATE statement.
                     continue
                 table_attr: TableAttr = {}
-                table_attr["columns"]: list[Column] = self._inspector.get_columns(
+                table_attr["columns"]: list[Column] = inspector.get_columns(
                     table_name, schema_name
                 )
 
                 # Unfortunately, get_indexes() doesn't include pkey.
-                pkey = self._inspector.get_pk_constraint(table_name, schema_name)
+                pkey = inspector.get_pk_constraint(table_name, schema_name)
                 pkey["column_names"] = pkey["constrained_columns"]
                 del pkey["constrained_columns"]
                 pkey["unique"] = True
-                indexes = [pkey] + self._inspector.get_indexes(table_name, schema_name)
+                indexes = [pkey] + inspector.get_indexes(table_name, schema_name)
                 table_attr["indexes"]: list[Index] = indexes
 
                 column_names = [column["name"] for column in table_attr["columns"]]
@@ -103,7 +91,7 @@ class GymSpec:
                         ]
                     )
                 query = f"SELECT {select_targets} FROM {table_name}"
-                attr_stats = self._engine.execute(query).fetchall()
+                attr_stats = engine.execute(query).fetchall()
                 assert (
                     len(attr_stats) == 1
                 ), f"Something weird has happened, check the query: {query}"
@@ -135,4 +123,10 @@ class GymSpec:
         return snapshot
 
     def __str__(self):
-        return self.prod_db_connstr
+        return (
+            "[Workloads="
+            + str(self.historical_workloads)
+            + ";State="
+            + str(self.historical_state)
+            + "]"
+        )

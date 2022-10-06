@@ -18,11 +18,13 @@ class DbGymEnv(gym.Env):
     def __init__(self, gym_spec: GymSpec, seed=15721):
         self._rng = np.random.default_rng(seed=seed)
         self._gym_spec = gym_spec
-        assert len(gym_spec.snapshot) == 1, "We only support one schema right now."
+        self._trainer = PostgresTrainer(gym_spec=self._gym_spec, seed=seed)
+        assert (
+            len(self._gym_spec.snapshot) == 1
+        ), "We only support one schema right now."
+        self._runner = WorkloadRunner()
         self.action_space = IndexSpace(gym_spec=gym_spec, seed=seed)
         self.observation_space = QPPNetFeatures(gym_spec=gym_spec, seed=seed)
-        self._trainer = PostgresTrainer(gym_spec=self._gym_spec, seed=seed)
-        self._runner = WorkloadRunner()
 
     def reset(
         self,
@@ -34,7 +36,6 @@ class DbGymEnv(gym.Env):
         self._rng = np.random.default_rng(seed=seed)
         self.action_space.seed(seed)
         self.observation_space.seed(seed)
-        self._trainer.delete_target_dbms()
         self._trainer.create_target_dbms()
         observation, info = self._run_workload()
         return observation, info
@@ -51,8 +52,21 @@ class DbGymEnv(gym.Env):
             self._trainer.get_target_dbms_connstr_sqlalchemy(),
             poolclass=NullPool,
         )
-        workload_db_path = self._gym_spec.historical_workload._workload_path
-        observation, info = self._runner.run(
-            workload_db_path, engine, self.observation_space
-        )
-        return observation, info
+        observations = []
+        infos = {}
+        current_observation_idx = 0
+        for workload in self._gym_spec.historical_workloads:
+            workload_db_path = workload._workload_path
+            print(f"Collecting observations for: {workload_db_path}")
+            observation, info = self._runner.run(
+                workload_db_path,
+                engine,
+                self.observation_space,
+                current_observation_idx,
+            )
+            current_observation_idx += len(observation)
+            assert type(observation) == list, "TODO hacks"
+            observations.extend(observation)
+            if info != {}:
+                infos[workload_db_path] = info
+        return observations, infos

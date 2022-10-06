@@ -6,7 +6,7 @@ https://github.com/rabbit721/QPPNet
 """
 
 from pathlib import Path
-from typing import TypeAlias
+from typing import Optional, TypeAlias
 
 import numpy as np
 import pandas as pd
@@ -45,7 +45,10 @@ class QPPNet:
         train_df: pd.DataFrame,
         test_df: pd.DataFrame,
         save_folder: Path,
-        batch_size: int = _PAPER_BATCH_SIZE,
+        batch_size: Optional[int] = _PAPER_BATCH_SIZE,
+        validation_size: Optional[int] = None,
+        patience_improvement: float = 1e-3,
+        patience: int = 10,
         num_epochs: int = _PAPER_NUM_EPOCHS,
     ):
         self._train_df: pd.DataFrame = train_df
@@ -55,6 +58,11 @@ class QPPNet:
         self._batch_size = batch_size
         self._num_epochs = num_epochs
         self._random_state = np.random.RandomState(15721)
+
+        self._validation_size = validation_size
+        self._min_validation_loss: np.float32 = np.inf
+        self._patience_improvement = patience_improvement
+        self._patience = patience
 
         # Compute dimensions.
         self._dim_dict = self._compute_dim_dict(
@@ -79,14 +87,70 @@ class QPPNet:
             self._optimizers[neural_unit_id] = optimizer
             self._schedulers[neural_unit_id] = scheduler
 
-    def train(self, num_epochs=None, force_stratify=True, epoch_save_interval=None, evaluate_on_save=False):
-        df = self._train_df
+    @staticmethod
+    def split(
+        df,
+        train_size=None,
+        test_size=None,
+        random_state: np.random.RandomState | int = 15721,
+    ):
+        n_all, n_train, n_test = len(df), None, None
+        if train_size is not None:
+            n_train = train_size if isinstance(train_size, int) else train_size * n_all
+        if test_size is not None:
+            n_test = test_size if isinstance(test_size, int) else test_size * n_all
+        if n_train is None:
+            n_train = n_all - test_size
+        if n_test is None:
+            n_test = n_all - train_size
+        assert (
+            n_train is not None and n_test is not None
+        ), "Need to specify either train size or test size."
 
+        hash_groups = df.groupby("Query Hash")
+        sizes = hash_groups.size()
+        train_sample = ((sizes / sizes.sum()) * n_train).apply(lambda x: int(max(x, 1)))
+        test_sample = ((sizes / sizes.sum()) * n_test).apply(lambda x: int(max(x, 1)))
+
+        train_idxs, test_idxs = [], []
+        for group, gdf in hash_groups:
+            train_idxs.extend(gdf.sample(n=train_sample[group]).index.values.tolist())
+            test_idxs.extend(gdf.sample(n=test_sample[group]).index.values.tolist())
+
+        train_queries = df.iloc[train_idxs]["Query Num"]
+        test_queries = df.iloc[test_idxs]["Query Num"]
+        train_df = df[df["Query Num"].isin(train_queries)]
+        test_df = df[df["Query Num"].isin(test_queries)]
+        # assert set(df["Query Hash"].unique()) == set(train_df["Query Hash"].unique())
+        # assert set(df["Query Hash"].unique()) == set(test_df["Query Hash"].unique())
+        return train_df, test_df
+
+    def train(
+        self,
+        validation_df=None,
+        num_epochs=None,
+        force_stratify=True,
+        epoch_save_interval=None,
+    ):
+        df = self._train_df
+        if validation_df is None:
+            if self._validation_size is not None:
+                df, validation_df = self.split(
+                    df, test_size=self._validation_size, random_state=self._random_state
+                )
+
+        early_stop = False
+        patience = self._patience
         num_epochs = self._num_epochs if num_epochs is None else num_epochs
         for epoch in tqdm(
             range(1, num_epochs + 1),
             desc=f"Training QPPNet for {num_epochs} epochs.",
         ):
+            if early_stop:
+                print(
+                    f"Early stopping: epoch {epoch}, min val loss {self._min_validation_loss}."
+                )
+                break
             # From the paper:
             # > Plan-based batch training
             # > To address these challenges, we propose constructing large batches of randomly sampled query plans.
@@ -98,19 +162,9 @@ class QPPNet:
             if self._batch_size is None:
                 batch = df
             elif force_stratify:
-                sizes = df.groupby("Query Hash").size()
-                must_take = df[df["Query Hash"].isin(sizes[sizes == 1].keys())].index
-                remaining = df[~df.index.isin(must_take)]
-                train, _ = train_test_split(
-                    remaining,
-                    train_size=self._batch_size,
-                    random_state=self._random_state,
-                    stratify=remaining["Query Hash"],
+                batch, _ = self.split(
+                    df, train_size=self._batch_size, random_state=self._random_state
                 )
-                query_nums = pd.concat([train, df.iloc[must_take]])[
-                    "Query Num"
-                ].unique()
-                batch = df[df["Query Num"].isin(query_nums)]
             else:
                 randomly_sampled_query_plans = np.random.choice(
                     df["Query Num"].unique(), size=self._batch_size, replace=False
@@ -140,7 +194,7 @@ class QPPNet:
                     gdf["Observation Index"],
                     gdf["Children Observation Indexes"],
                     gdf["Features"],
-                    gdf["Actual Total Time"],
+                    gdf["Actual Total Time (us)"],
                 ):
                     neural_unit_id = (node_type, len(children_idxs))
 
@@ -182,9 +236,8 @@ class QPPNet:
                 # Section 5.1.1.
                 num_losses_node_type = len(losses)
                 loss_sum = torch.sum(torch.stack(losses))
-                batch_loss = torch.sqrt(
-                    torch.mean(loss_sum / num_losses_total)
-                )  # Eq. (7)
+                # Eq. (7) defines the batch loss (rmse).
+                batch_loss = torch.sqrt(torch.mean(loss_sum))
                 scaling_factor = num_losses_node_type / num_losses_total
                 batch_loss.backward(torch.ones_like(batch_loss) * scaling_factor)
                 self._optimizers[neural_unit_id].step()
@@ -192,15 +245,43 @@ class QPPNet:
                 pbar.update()
             pbar.close()
 
-            if (epoch_save_interval is not None) and (epoch % epoch_save_interval == 0):
-                self.save_weights(epoch)
-                if evaluate_on_save:
-                    evaluate_df = self.evaluate(leave_tqdm=False)
-                    evaluate_df.to_parquet(f"evaluate_epoch_{epoch}.parquet")
+            validation_loss = None
+            should_save = (epoch_save_interval is not None) and (
+                epoch % epoch_save_interval == 0
+            )
 
-    def evaluate(self, leave_tqdm=True):
-        with torch.no_grad():
+            if validation_df is not None:
+                evaluate_validation_df = self.evaluate(
+                    df=validation_df, leave_tqdm=False
+                )
+                validation_rmse, _, _, _ = self.compute_metrics(evaluate_validation_df)
+                validation_loss = validation_rmse
+
+                if validation_loss > (
+                    self._min_validation_loss + self._patience_improvement
+                ):
+                    # Validation loss is not improving fast enough.
+                    patience -= 1
+                    if patience == 0:
+                        early_stop = True
+                else:
+                    # Validation loss is improving fast enough, reset patience.
+                    patience = self._patience
+
+                if validation_loss < self._min_validation_loss:
+                    self._min_validation_loss = validation_loss
+                    should_save = True
+
+            if should_save:
+                metrics_str = ""
+                if validation_loss is not None:
+                    metrics_str += f"validationloss_{validation_loss:.3f}"
+                self.save_weights(epoch, metrics_str)
+
+    def evaluate(self, df=None, leave_tqdm=True):
+        if df is None:
             df = self._test_df
+        with torch.no_grad():
             equivalence_classes = df.groupby("Query Hash")
 
             pbar = tqdm(
@@ -218,12 +299,20 @@ class QPPNet:
                 # Sort by observation index descending to generate children first.
                 gdf = gdf.sort_values("Observation Index", ascending=False)
                 # Forward pass on every model.
-                for node_type, obs_idx, children_idxs, features, actual_time in zip(
+                for (
+                    node_type,
+                    obs_idx,
+                    children_idxs,
+                    query_num,
+                    features,
+                    actual_time,
+                ) in zip(
                     gdf["Node Type"],
                     gdf["Observation Index"],
                     gdf["Children Observation Indexes"],
+                    gdf["Query Num"],
                     gdf["Features"],
-                    gdf["Actual Total Time"],
+                    gdf["Actual Total Time (us)"],
                 ):
                     neural_unit_id = (node_type, len(children_idxs))
 
@@ -257,23 +346,27 @@ class QPPNet:
         return pd.DataFrame(
             {
                 "Observation Index": observation_indexes,
-                "Estimated Latency": estimated_latencies,
-                "Actual Latency": actual_latencies,
+                "Estimated Latency (us)": estimated_latencies,
+                "Actual Latency (us)": actual_latencies,
             }
         )
 
-    def save_weights(self, epoch: int):
+    def save_weights(self, epoch: int, metrics_str: str):
         for neural_unit_id, neural_unit in self._neural_units.items():
             node_type, num_children = neural_unit_id
-            filename = f"id_{node_type}-{num_children}_epoch_{epoch}.pth"
+            filename = (
+                f"id_{node_type}-{num_children}_epoch_{epoch}_m_{metrics_str}_end.pth"
+            )
             path = self._save_folder / filename
             torch.save(neural_unit.state_dict(), path)
 
     def load_weights(self, epoch: int):
         for neural_unit_id in self._neural_units.keys():
             node_type, num_children = neural_unit_id
-            filename = f"id_{node_type}-{num_children}_epoch_{epoch}.pth"
-            path = self._save_folder / filename
+            filename = f"id_{node_type}-{num_children}_epoch_{epoch}_m_*_end.pth"
+            candidates = list(self._save_folder.glob(filename))
+            assert len(candidates) == 1
+            path = candidates[0]
             state_dict = torch.load(path)
             self._neural_units[neural_unit_id].load_state_dict(state_dict)
 
@@ -288,7 +381,8 @@ class QPPNet:
     @staticmethod
     def calculate_root_mean_square_error(evaluate_df):
         return (
-            (evaluate_df["Actual Latency"] - evaluate_df["Estimated Latency"]) ** 2
+            (evaluate_df["Actual Latency (us)"] - evaluate_df["Estimated Latency (us)"])
+            ** 2
         ).mean() ** 0.5
 
     @staticmethod
@@ -299,10 +393,11 @@ class QPPNet:
             * (
                 (
                     (
-                        evaluate_df["Actual Latency"] - evaluate_df["Estimated Latency"]
+                        evaluate_df["Actual Latency (us)"]
+                        - evaluate_df["Estimated Latency (us)"]
                     ).abs()
                 )
-                / evaluate_df["Actual Latency"]
+                / evaluate_df["Actual Latency (us)"]
             ).sum()
         )
 
@@ -314,7 +409,8 @@ class QPPNet:
             * (
                 (
                     (
-                        evaluate_df["Actual Latency"] - evaluate_df["Estimated Latency"]
+                        evaluate_df["Actual Latency (us)"]
+                        - evaluate_df["Estimated Latency (us)"]
                     ).abs()
                 )
             ).sum()
@@ -325,8 +421,8 @@ class QPPNet:
         # From the paper,
         # > R(q) = maximum(ratio between the actual and the predicted, ratio between the predicted and the actual)
         # > Intuitively, the R(q) value represents the "factor" by which a particular estimate was off.
-        a = evaluate_df["Estimated Latency"] / evaluate_df["Actual Latency"]
-        b = evaluate_df["Actual Latency"] / evaluate_df["Estimated Latency"]
+        a = evaluate_df["Estimated Latency (us)"] / evaluate_df["Actual Latency (us)"]
+        b = evaluate_df["Actual Latency (us)"] / evaluate_df["Estimated Latency (us)"]
         return pd.concat([a, b], axis=1).max(axis=1).max()
 
     @staticmethod

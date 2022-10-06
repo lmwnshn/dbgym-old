@@ -21,7 +21,9 @@ from dbgym.util.sql import substitute
 
 
 class Work(ABC):
-    def __init__(self, sql_keyword: str):
+    def __init__(self, work_query_num: int, sql_keyword: str):
+        # work_query_num tracks the ORIGINAL workload.db query number.
+        self.work_query_num = work_query_num
         self.sql_keyword = sql_keyword.lower()
 
     def execute(
@@ -39,8 +41,8 @@ class Work(ABC):
 
 
 class WorkQueryString(Work):
-    def __init__(self, query: str, sql_keyword: str):
-        super().__init__(sql_keyword)
+    def __init__(self, work_query_num: int, query: str, sql_keyword: str):
+        super().__init__(work_query_num, sql_keyword)
         self.query = query
 
     def __str__(self):
@@ -54,8 +56,14 @@ class WorkQueryString(Work):
 
 
 class WorkQueryPrepare(Work):
-    def __init__(self, template_id: int, params: Optional[tuple], sql_keyword: str):
-        super().__init__(sql_keyword)
+    def __init__(
+        self,
+        work_query_num: int,
+        template_id: int,
+        params: Optional[tuple],
+        sql_keyword: str,
+    ):
+        super().__init__(work_query_num, sql_keyword)
         self.template_id = template_id
         self.params = params
 
@@ -99,6 +107,7 @@ def _should_prepare(template):
 
 
 def _generate_work(
+    work_query_num: int,
     prepare_types: dict[int, list[str]],
     all_templates: dict[int, str],
     incompatible_templates: dict[int, str],
@@ -140,15 +149,15 @@ def _generate_work(
 
     if template_id not in incompatible_templates:
         # This template was PREPARE'd.
-        return WorkQueryPrepare(template_id, params, sql_keyword)
+        return WorkQueryPrepare(work_query_num, template_id, params, sql_keyword)
     # This template could not be PREPARE'd.
     template = incompatible_templates[template_id]
     if params is None:
         # There are no parameters.
-        return WorkQueryString(template, sql_keyword)
+        return WorkQueryString(work_query_num, template, sql_keyword)
     # There are parameters; make an expensive call to substitute().
     params = {f"${i}": param for i, param in enumerate(params, 1)}
-    return WorkQueryString(substitute(template, params), sql_keyword)
+    return WorkQueryString(work_query_num, substitute(template, params), sql_keyword)
 
 
 def _submission_worker(
@@ -169,7 +178,9 @@ def _submission_worker(
         pool_size=psutil.cpu_count(),
     )
     # TODO(WAN): Figure out the semantics of elapsed_s. Do we care? Or replay goes brr?
+    min_query_num = engine.execute("select min(query_num) from workload").fetchone()[0]
     max_query_num = engine.execute("select max(query_num) from workload").fetchone()[0]
+    total_query_num = engine.execute("select count(*) from workload").fetchone()[0]
 
     # PREPARE any templates that can be prepared.
     all_templates: dict[int, str] = {}
@@ -195,9 +206,6 @@ def _submission_worker(
         prepare_types[template_id] = types
         prepare_types_queue.task_done()
 
-    # HACK: reuse prepare_queue to communicate the max number of queries.
-    prepare_queue.put(max_query_num)
-
     # Get templates without parameters.
     sql = (
         "select distinct(template_id) "
@@ -213,7 +221,10 @@ def _submission_worker(
     )
     templates_with_params = engine.execute(sql).fetchall()
 
-    cur_query_num = 0
+    # HACK: Use prepare queue to communicate total.
+    prepare_queue.put(total_query_num)
+
+    cur_query_num = min_query_num
     tick_query_num = 50000
     while True:
         all_results = []
@@ -232,6 +243,7 @@ def _submission_worker(
                 (
                     qnum,
                     _generate_work(
+                        qnum,
                         prepare_types,
                         all_templates,
                         incompatible_templates,
@@ -258,6 +270,7 @@ def _submission_worker(
                 (
                     qnum,
                     _generate_work(
+                        qnum,
                         prepare_types,
                         all_templates,
                         incompatible_templates,
@@ -287,7 +300,12 @@ class WorkloadRunner:
         pass
 
     def run(
-        self, workload_db_path: Path, engine: Engine, obs_space: Space
+        self,
+        workload_db_path: Path,
+        engine: Engine,
+        obs_space: Space,
+        current_observation_idx=0,
+        print_errors=False,
     ) -> tuple[ObsType, dict]:
         sql_prefix = None
         if isinstance(obs_space, QPPNetFeatures):
@@ -327,7 +345,7 @@ class WorkloadRunner:
             while not prepare_queue.empty():
                 template_id, template = prepare_queue.get()
                 sql = f"PREPARE work_{template_id} AS {template}"
-                print("PREPARE: ", sql)
+                # print("PREPARE: ", sql)
                 conn.execute(sql)
                 prepare_queue.task_done()
 
@@ -350,10 +368,9 @@ class WorkloadRunner:
             okay = 0
             errors = 0
             start_time = time.time()
-            current_query_num = 1
-            current_observation_idx = 0
-            max_query_num = prepare_queue.get()
-            with tqdm(total=max_query_num) as pbar:
+
+            total_query_num = prepare_queue.get()
+            with tqdm(total=total_query_num) as pbar:
                 while True:
                     if done_event.is_set() and work_queue.empty():
                         break
@@ -373,16 +390,16 @@ class WorkloadRunner:
                                 for result_dict in result_dicts:
                                     new_observations = obs_space.generate(
                                         result_dict,
-                                        current_query_num,
+                                        work.work_query_num,
                                         current_observation_idx,
                                     )
                                     current_observation_idx += len(new_observations)
                                     observations.extend(new_observations)
                         okay += 1
                     except SQLAlchemyError as e:
-                        print(f"WARNING: error executing {work}, error: {e}")
+                        if print_errors:
+                            print(f"WARNING: error executing {work}, error: {e}")
                         errors += 1
-                    current_query_num += 1
                     work_queue.task_done()
                     pbar.update()
 

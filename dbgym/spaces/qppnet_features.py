@@ -96,7 +96,7 @@ class QPPNetFeatures(spaces.Sequence):
         # ("Query Num", self._singleton(query_num, dtype=np.int32)),
 
         space_dict = {
-            "Actual Total Time": spaces.Box(
+            "Actual Total Time (ms)": spaces.Box(
                 low=0, high=np.inf, dtype=np.float32, seed=seed
             ),
             "Children Observation Indexes": spaces.Sequence(
@@ -148,7 +148,7 @@ class QPPNetFeatures(spaces.Sequence):
         ]
 
         ordered_dict_items = [
-            ("Actual Total Time", self._singleton(plan_dict["Actual Total Time"])),
+            ("Actual Total Time (ms)", self._singleton(plan_dict["Actual Total Time"])),
             ("Children Observation Indexes", output_children_observation_indexes),
             ("Features", self._featurize(plan_dict)),
             ("Node Type", self._one_hot(self._node_types, plan_dict, "Node Type")),
@@ -389,6 +389,9 @@ class QPPNetFeatures(spaces.Sequence):
             df[cat] = df[cat].apply(
                 tuple
             )  # .astype("category") # pending pyarrow support for nested dicts
+
+        df["Actual Total Time (us)"] = df["Actual Total Time (ms)"] * 1000
+        del df["Actual Total Time (ms)"]
 
         # Defragment the df.
         df = df.copy()

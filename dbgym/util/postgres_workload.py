@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pglast
-from sqlalchemy import Column, Integer, String, Table, create_engine, insert, text
+from sqlalchemy import (Column, Integer, String, Table, create_engine, insert,
+                        text)
 from tqdm import tqdm
 
 from dbgym.util.sql import substitute
@@ -212,7 +213,7 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
             query_template_table.create(engine)
     try_insert("query_template", batch_threshold=0)
 
-    params_count = {}
+    template_params_map = {}
     for query_num, (query_template, query_params, elapsed_s) in enumerate(
         tqdm(df.itertuples(index=False), total=len(df), desc="Writing out params."), 1
     ):
@@ -220,10 +221,22 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
 
         params_id = None
         if len(query_params) > 0:
-            params_count[template_id] = params_count.get(template_id, 0) + 1
-            params_id = params_count[template_id]
-            params_table = f"template_{template_id}_params"
-            try_insert(params_table, (params_id, *query_params))
+            params_tup = tuple(query_params)
+            if (
+                template_id in template_params_map
+                and params_tup in template_params_map[template_id]
+            ):
+                params_id = template_params_map[template_id][params_tup]
+            else:
+                template_params_map[template_id] = template_params_map.get(
+                    template_id, {}
+                )
+                template_params_map[template_id][params_tup] = (
+                    len(template_params_map[template_id]) + 1
+                )
+                params_id = template_params_map[template_id][params_tup]
+                params_table = f"template_{template_id}_params"
+                try_insert(params_table, (params_id, *query_params))
 
         try_insert(
             "workload", (workload_id, query_num, elapsed_s, template_id, params_id)

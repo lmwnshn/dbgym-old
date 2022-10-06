@@ -2,7 +2,8 @@
 Defines the format of workload.db.
 """
 
-from sqlalchemy import Column, ForeignKey, Index, Integer, MetaData, String, Table
+from sqlalchemy import (Column, ForeignKey, Index, Integer, MetaData, String,
+                        Table)
 
 
 def get_workload_schema() -> MetaData:

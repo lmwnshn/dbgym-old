@@ -4,6 +4,7 @@ from time import sleep
 
 import psutil
 from plumbum import local
+from sqlalchemy import create_engine, inspect
 
 from dbgym.envs.gym_spec import GymSpec
 from dbgym.envs.state import PostgresState
@@ -54,6 +55,11 @@ class PostgresTrainer(Trainer):
         self._db_user = "gym_user"
         self._db_pass = "gym_pass"
 
+        # TODO(WAN): hack, create and delete target DBMS to populate snapshot.
+        if self._gym_spec.snapshot is None:
+            self.create_target_dbms()
+            self.delete_target_dbms()
+
     def get_target_dbms_connstr_sqlalchemy(self) -> str:
         return f"postgresql+psycopg2://{self._db_user}:{self._db_pass}@{self._cluster_host}:{self._cluster_port}/{self._db_name}"
 
@@ -100,22 +106,18 @@ class PostgresTrainer(Trainer):
         self._restore_from_state()
 
     def delete_target_dbms(self):
-        sudo[
-            pg_dropcluster["--stop", self._cluster_version, self._cluster_name]
-        ].run_fg()
+        sudo[pg_dropcluster["--stop", self._cluster_version, self._cluster_name]].run()
 
     def _start_target_dbms(self):
-        sudo[pg_ctlcluster[self._cluster_version, self._cluster_name, "start"]].run_fg()
+        sudo[pg_ctlcluster[self._cluster_version, self._cluster_name, "start"]].run()
         self._wait_until_ready()
 
     def _stop_target_dbms(self):
-        sudo[pg_ctlcluster[self._cluster_version, self._cluster_name, "stop"]].run_fg()
+        sudo[pg_ctlcluster[self._cluster_version, self._cluster_name, "stop"]].run()
         self._wait_until_ready()
 
     def _restart_target_dbms(self):
-        sudo[
-            pg_ctlcluster[self._cluster_version, self._cluster_name, "restart"]
-        ].run_fg()
+        sudo[pg_ctlcluster[self._cluster_version, self._cluster_name, "restart"]].run()
         self._wait_until_ready()
 
     def _create_cluster(self):
@@ -129,7 +131,7 @@ class PostgresTrainer(Trainer):
             "-p",
             self._cluster_port,
         ]
-        sudo[pg_createcluster[pg_createcluster_args]].run_fg()
+        sudo[pg_createcluster[pg_createcluster_args]].run()
 
     def _test_cluster_exists(self):
         retcode, stdout, _ = pg_lsclusters["-j"].run()
@@ -148,7 +150,7 @@ class PostgresTrainer(Trainer):
                 "-c",
                 sql,
             ]
-            sudo["-u", "postgres", "--login", psql_command].run_fg()
+            sudo["-u", "postgres", "--login", psql_command].run()
         else:
             with local.env(PGPASSWORD=self._db_pass):
                 psql_command = psql[
@@ -163,7 +165,7 @@ class PostgresTrainer(Trainer):
                     "-c",
                     sql,
                 ]
-                psql_command.run_fg()
+                psql_command.run()
 
     def _pgtune(self):
         """
@@ -247,4 +249,10 @@ class PostgresTrainer(Trainer):
                 psutil.cpu_count(logical=True),
                 "--verbose",
                 pg_state._historical_state_path,
-            ].run_fg()
+            ].run()
+
+        # TODO(WAN): This is a hacky way of going about things.
+        if self._gym_spec.snapshot is None:
+            engine = create_engine(self.get_target_dbms_connstr_sqlalchemy())
+            inspector = inspect(engine)
+            self._gym_spec.snapshot_db(engine, inspector)
