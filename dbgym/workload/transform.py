@@ -10,19 +10,19 @@ class WorkloadTransform(ABC):
     def __init__(self, name: str):
         self.name = name
 
-    def transform(self, workload_db_path: Path, output_db_path: Path):
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
         raise NotImplementedError
 
     def __str__(self):
         return self.name
 
 
-class Identity(WorkloadTransform):
+class PerfectPrediction(WorkloadTransform):
     def __init__(self):
-        super().__init__(f"Identity")
+        super().__init__(f"PerfectPrediction")
 
-    def transform(self, workload_db_path: Path, output_db_path: Path):
-        shutil.copy(workload_db_path, output_db_path)
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
+        shutil.copy(workload_test_path, output_db_path)
 
 
 class OnlyUniqueQueries(WorkloadTransform):
@@ -43,8 +43,8 @@ class SampleFracQueries(WorkloadTransform):
         self._frac = frac
         self._random_state = random_state
 
-    def transform(self, workload_db_path: Path, output_db_path: Path):
-        shutil.copy(workload_db_path, output_db_path)
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
+        shutil.copy(workload_test_path, output_db_path)
         engine = create_engine(f"sqlite:///{output_db_path}")
         df = pd.read_sql("SELECT * FROM workload", engine)
         df = df.sample(frac=self._frac, random_state=self._random_state).sort_index()
@@ -61,8 +61,8 @@ class ParamSubstitution(WorkloadTransform):
         self._unquote = unquote
         self._numeric = numeric
 
-    def transform(self, workload_db_path: Path, output_db_path: Path):
-        shutil.copy(workload_db_path, output_db_path)
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
+        shutil.copy(workload_test_path, output_db_path)
         engine = create_engine(f"sqlite:///{output_db_path}")
         inspector = inspect(engine)
         for table_name in inspector.get_table_names():

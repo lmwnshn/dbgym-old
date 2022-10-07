@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from sklearn.model_selection import train_test_split
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import StepLR
 from tqdm import tqdm
@@ -48,7 +47,8 @@ class QPPNet:
         batch_size: Optional[int] = _PAPER_BATCH_SIZE,
         validation_size: Optional[int] = None,
         patience_improvement: float = 1e-3,
-        patience: int = 10,
+        patience: int = 50,
+        early_stop_min_epochs:Optional[int] = 1000,
         num_epochs: int = _PAPER_NUM_EPOCHS,
     ):
         self._train_df: pd.DataFrame = train_df
@@ -63,6 +63,7 @@ class QPPNet:
         self._min_validation_loss: np.float32 = np.inf
         self._patience_improvement = patience_improvement
         self._patience = patience
+        self._early_stop_min_epochs = early_stop_min_epochs
 
         # Compute dimensions.
         self._dim_dict = self._compute_dim_dict(
@@ -94,6 +95,7 @@ class QPPNet:
         test_size=None,
         random_state: np.random.RandomState | int = 15721,
     ):
+        # TODO(WAN): train_size and test_size are more like minimum sizes.
         n_all, n_train, n_test = len(df), None, None
         if train_size is not None:
             n_train = train_size if isinstance(train_size, int) else train_size * n_all
@@ -109,13 +111,17 @@ class QPPNet:
 
         hash_groups = df.groupby("Query Hash")
         sizes = hash_groups.size()
+        train_min_size = sizes.apply(lambda x: min(x, n_train // len(sizes)))
+        test_min_size = sizes.apply(lambda x: min(x, n_test // len(sizes)))
         train_sample = ((sizes / sizes.sum()) * n_train).apply(lambda x: int(max(x, 1)))
+        train_sample = pd.concat([train_sample, train_min_size], axis=1).max(axis=1)
         test_sample = ((sizes / sizes.sum()) * n_test).apply(lambda x: int(max(x, 1)))
+        test_sample = pd.concat([test_sample, test_min_size], axis=1).max(axis=1)
 
         train_idxs, test_idxs = [], []
         for group, gdf in hash_groups:
-            train_idxs.extend(gdf.sample(n=train_sample[group]).index.values.tolist())
-            test_idxs.extend(gdf.sample(n=test_sample[group]).index.values.tolist())
+            train_idxs.extend(gdf.sample(n=train_sample[group], random_state=random_state).index.values.tolist())
+            test_idxs.extend(gdf.sample(n=test_sample[group], random_state=random_state).index.values.tolist())
 
         train_queries = df.iloc[train_idxs]["Query Num"]
         test_queries = df.iloc[test_idxs]["Query Num"]
@@ -262,7 +268,7 @@ class QPPNet:
                 ):
                     # Validation loss is not improving fast enough.
                     patience -= 1
-                    if patience == 0:
+                    if patience == 0 and (self._early_stop_min_epochs is None or epoch >= self._early_stop_min_epochs):
                         early_stop = True
                 else:
                     # Validation loss is improving fast enough, reset patience.

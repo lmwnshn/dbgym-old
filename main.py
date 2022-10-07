@@ -9,7 +9,7 @@ from dbgym.envs.workload import Workload
 from dbgym.spaces.qppnet_features import QPPNetFeatures
 from dbgym.util.postgres_workload import convert_postgresql_csvlog_to_workload
 from dbgym.workload.split import split_workload
-from dbgym.workload.transform import (Identity, OnlyUniqueQueries,
+from dbgym.workload.transform import (PerfectPrediction, OnlyUniqueQueries,
                                       ParamSubstitution, SampleFracQueries)
 from models.qppnet import QPPNet
 
@@ -32,21 +32,22 @@ transformed_workloads_path = Path("./artifact/experiment/transformed_workloads/"
 
 # Transforms to try.
 transforms = [
-    Identity(),
+    PerfectPrediction(),
     OnlyUniqueQueries(),
     SampleFracQueries(frac=0.01, random_state=15721),
     SampleFracQueries(frac=0.1, random_state=15721),
     SampleFracQueries(frac=0.8, random_state=15721),
     ParamSubstitution("const0", lambda series: f"'0'"),
-    # ParamSubstitution("max", lambda series: f"'{series.max()}'"),
     ParamSubstitution("mean", lambda series: f"'{series.mean()}'"),
     ParamSubstitution("median", lambda series: f"'{series.median()}'"),
+    # ParamSubstitution("max", lambda series: f"'{series.max()}'"),
     # ParamSubstitution("min", lambda series: f"'{series.min()}'"),
 ]
 
 # Experiments to be run. Test must be first.
 experiments = [
     ("Test", [Workload(workload_test_path)]),
+    ("OnlyTrain", [Workload(workload_train_path)]),
     # And one for each transform.
 ]
 
@@ -63,7 +64,7 @@ for transform in transforms:
     )
     # TODO(WAN): dangerous semantics here.
     if not workload_transform_path.exists():
-        transform.transform(workload_test_path, workload_transform_path)
+        transform.transform(workload_train_path, workload_test_path, workload_transform_path)
     experiments.append(
         (
             transform.name,
