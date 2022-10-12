@@ -29,8 +29,8 @@ class OnlyUniqueQueries(WorkloadTransform):
     def __init__(self):
         super().__init__(f"OnlyUnique")
 
-    def transform(self, workload_db_path: Path, output_db_path: Path):
-        shutil.copy(workload_db_path, output_db_path)
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
+        shutil.copy(workload_test_path, output_db_path)
         engine = create_engine(f"sqlite:///{output_db_path}")
         df = pd.read_sql("SELECT * FROM workload", engine)
         df = df.iloc[df[["template_id", "params_id"]].drop_duplicates().index]
