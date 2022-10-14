@@ -55,9 +55,9 @@ class DbGymEnv(gym.Env):
         observations = []
         infos = {}
         current_observation_idx = 0
-        for workload in self._gym_spec.historical_workloads:
+        for i, workload in enumerate(self._gym_spec.historical_workloads):
             workload_db_path = workload._workload_path
-            print(f"Collecting observations for: {workload_db_path}")
+            print(f"Collecting observations for [{i}/{len(self._gym_spec.historical_workloads)}]: {workload_db_path}")
             observation, info = self._runner.run(
                 workload_db_path,
                 engine,

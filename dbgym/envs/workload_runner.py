@@ -10,6 +10,7 @@ import pandas as pd
 import psutil
 from gym.core import ObsType
 from gym.spaces import Space
+import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection, CursorResult, Engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -52,7 +53,7 @@ class WorkQueryString(Work):
         self, conn: Connection, sql_prefix: Optional[str] = None
     ) -> (CursorResult, bool):
         sql, prefixed = self.try_add_prefix(sql_prefix, self.query)
-        return conn.execute(sql), prefixed
+        return conn.execute(sqlalchemy.text(sql)), prefixed
 
 
 class WorkQueryPrepare(Work):
@@ -75,7 +76,7 @@ class WorkQueryPrepare(Work):
     ) -> (CursorResult, bool):
         sql = f"EXECUTE work_{self.template_id}{self._format_params(self.params)}"
         sql, prefixed = self.try_add_prefix(sql_prefix, sql)
-        return conn.execute(sql), prefixed
+        return conn.execute(sqlalchemy.text(sql)), prefixed
 
     def _format_params(self, params: Optional[tuple]) -> str:
         if params is None:
@@ -84,6 +85,7 @@ class WorkQueryPrepare(Work):
 
 
 def _should_prepare(template):
+    return False
     startswith = [
         "alter ",
         "set ",

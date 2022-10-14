@@ -61,8 +61,8 @@ def _read_postgresql_csvlog(pg_csvlog):
         header=None,
     )
 
-    simple = f"^statement: (.*)"
-    extended = f"^execute .+: (.*)"
+    simple = r"^statement: ([\s\S]*)"
+    extended = r"^execute .+: ([\s\S]*)"
     regex = f"(?:{simple})|(?:{extended})"
 
     with tqdm(total=5, desc="Processing CSVLOG into DataFrame.") as pbar:

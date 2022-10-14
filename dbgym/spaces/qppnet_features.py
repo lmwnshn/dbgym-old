@@ -6,31 +6,52 @@ import pandas as pd
 from gym import spaces
 
 from dbgym.envs.gym_spec import GymSpec
-
+import datetime
 
 class QPPNetFeatures(spaces.Sequence):
     _node_types = [
         "Aggregate",
         "Append",
+        "BitmapAnd",
+        "BitmapOr",
         "Bitmap Heap Scan",
         "Bitmap Index Scan",
+        "CTE Scan",
+        "Custom Scan",
+        "Foreign Scan",
         "Function Scan",
+        "Gather",
+        "Gather Merge",
+        "Group",
         "Hash",
         "Hash Join",
+        "Incremental Sort",
         "Index Scan",
         "Index Only Scan",
         "Limit",
         "LockRows",
+        "Materialize",
         "Memoize",
+        "Merge Append",
         "Merge Join",
         "ModifyTable",
+        "Named Tuplestore Scan",
         "Nested Loop",
         "ProjectSet",
+        "Recursive Union",
         "Result",
+        "Sample Scan",
         "Seq Scan",
+        "SetOp",
         "Subquery Scan",
         "Sort",
+        "Table Function Scan",
+        "Tid Scan",
+        "Tid Range Scan",
+        "Unique",
         "WindowAgg",
+        "WorkTable Scan",
+        "Values Scan",
     ]
     _join_types = ["invalid", "Inner", "Left", "Full", "Right", "Semi", "Anti"]
     _parent_relationships = [
@@ -251,21 +272,20 @@ class QPPNetFeatures(spaces.Sequence):
                     attributes = self._attribute_names[rel_name]
                     for idx, attr_name in enumerate(attributes):
                         if attr_name in target:
+                            min_val, med_val, max_val = [
+                                self._attribute_stats[rel_name][attr_name][x]
+                                for x in ["min", "median", "max"]
+                            ]
                             # TODO(WAN): string support? We didn't handle this before either AFAIK.
-                            if (
-                                type(self._attribute_stats[rel_name][attr_name]["min"])
-                                == str
-                            ):
+                            if type(min_val) == str:
                                 continue
-                            output_min_vec[idx] = self._attribute_stats[rel_name][
-                                attr_name
-                            ]["min"]
-                            output_med_vec[idx] = self._attribute_stats[rel_name][
-                                attr_name
-                            ]["median"]
-                            output_max_vec[idx] = self._attribute_stats[rel_name][
-                                attr_name
-                            ]["max"]
+                            if type(min_val) in [datetime.datetime, datetime.date]:
+                                min_val = pd.Timestamp(min_val).timestamp()
+                                med_val = pd.Timestamp(med_val).timestamp()
+                                max_val = pd.Timestamp(max_val).timestamp()
+                            output_min_vec[idx] = min_val
+                            output_med_vec[idx] = med_val
+                            output_max_vec[idx] = max_val
         return output_min_vec, output_med_vec, output_max_vec
 
     def _featurize_query_hash(self, plan_dict):

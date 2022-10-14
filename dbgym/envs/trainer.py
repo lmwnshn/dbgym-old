@@ -55,6 +55,12 @@ class PostgresTrainer(Trainer):
         self._db_user = "gym_user"
         self._db_pass = "gym_pass"
 
+        # TODO(WAN): This is a hacky way of going about things.
+        if self._gym_spec.snapshot is None:
+            engine = create_engine(self.get_target_dbms_connstr_sqlalchemy())
+            inspector = inspect(engine)
+            self._gym_spec.snapshot_db(engine, inspector)
+        return
         # TODO(WAN): hack, create and delete target DBMS to populate snapshot.
         if self._gym_spec.snapshot is None:
             self.create_target_dbms()
@@ -64,6 +70,7 @@ class PostgresTrainer(Trainer):
         return f"postgresql+psycopg2://{self._db_user}:{self._db_pass}@{self._cluster_host}:{self._cluster_port}/{self._db_name}"
 
     def create_target_dbms(self):
+        return
         # Setup cluster.
         if self._test_cluster_exists():
             self.delete_target_dbms()
@@ -106,6 +113,7 @@ class PostgresTrainer(Trainer):
         self._restore_from_state()
 
     def delete_target_dbms(self):
+        return
         sudo[pg_dropcluster["--stop", self._cluster_version, self._cluster_name]].run()
 
     def _start_target_dbms(self):
