@@ -44,7 +44,7 @@ class PaperConstants:
     BATCH_SIZE = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class NeuralUnitId:
     node_type: str
     num_children: int
@@ -476,17 +476,16 @@ class QPPNet:
 
     def save_weights(self, epoch: int, metrics_str: str):
         for neural_unit_id, neural_unit in self._neural_units.items():
-            node_type, num_children = neural_unit_id
             filename = (
-                f"id_{node_type}-{num_children}_epoch_{epoch}_m_{metrics_str}_end.pth"
+                f"{neural_unit_id.node_type}-{neural_unit_id.num_children}"
+                f"_epoch_{epoch}_m_{metrics_str}_end.pth"
             )
             path = self._save_folder / filename
             torch.save(neural_unit.state_dict(), path)
 
     def load_weights(self, epoch: int):
         for neural_unit_id in self._neural_units.keys():
-            node_type, num_children = neural_unit_id
-            filename = f"id_{node_type}-{num_children}_epoch_{epoch}_m_*_end.pth"
+            filename = f"{neural_unit_id.node_type}-{neural_unit_id.num_children}_epoch_{epoch}_m_*_end.pth"
             candidates = list(self._save_folder.glob(filename))
             assert len(candidates) == 1
             path = candidates[0]
@@ -578,8 +577,8 @@ class QPPNet:
             df["Children Observation Indexes"].apply(len),
             df["Features"].apply(len),
         ):
-            input_length = feature_len + NeuralUnit.DATA_OUTPUT_SIZE * num_children
-            neural_unit_id = (node_type, num_children)
+            input_length = feature_len + PaperConstants.DATA_OUTPUT_SIZE * num_children
+            neural_unit_id = NeuralUnitId(node_type, num_children)
             if neural_unit_id in dim_dict:
                 assert (
                     dim_dict[neural_unit_id] == input_length

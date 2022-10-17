@@ -94,7 +94,7 @@ for config in experiment_configs:
         if experiment_workload.name == "OnlyTest":
             test_df = pd.read_parquet(observations_path)
             test_df["Query Hash"] = test_df["Query Hash"].apply(tuple)
-            _, validation_df = QPPNet.split(test_df, min_test_size=len(test_df), random_state=15721)
+            _, validation_df = QPPNet.split(test_df, min_test_size=4096, random_state=15721)
             continue
 
         train_df = pd.read_parquet(observations_path)
