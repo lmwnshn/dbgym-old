@@ -38,7 +38,7 @@ class PaperConstants:
     NUM_HIDDEN_LAYERS = 5
     NUM_NEURONS = 128
     DATA_OUTPUT_SIZE = 32
-    LEARNING_RATE = 1e-6
+    LEARNING_RATE = 0.001
     MOMENTUM = 0.9
     NUM_EPOCHS = 1000
     BATCH_SIZE = None
@@ -220,169 +220,177 @@ class QPPNet:
             The interval at which the QPPNet model should be saved.
         """
         # TODO(WAN): set_detect_anomaly is too useful since QPPNet likes blowing up.
-        with torch.autograd.set_detect_anomaly(True):
-            # Set up the train df.
-            df = self._train_df
-            # Set up the validation df if necessary.
-            if validation_df is None:
-                if self._validation_size is not None:
-                    df, validation_df = self.split(
-                        df,
-                        min_test_size=self._validation_size,
-                        random_state=self._random_state,
-                    )
+        try:
+            with torch.autograd.set_detect_anomaly(True):
+                # Set up the train df.
+                df = self._train_df
+                # Set up the validation df if necessary.
+                if validation_df is None:
+                    if self._validation_size is not None:
+                        df, validation_df = self.split(
+                            df,
+                            min_test_size=self._validation_size,
+                            random_state=self._random_state,
+                        )
 
-            early_stop = False
-            patience = self._patience
-            num_epochs = self._num_epochs if num_epochs is None else num_epochs
+                early_stop = False
+                patience = self._patience
+                num_epochs = self._num_epochs if num_epochs is None else num_epochs
 
-            # Train for the given number of epochs.
-            for epoch in tqdm(
-                range(1, num_epochs + 1),
-                desc=f"Training QPPNet for {num_epochs} epochs.",
-            ):
-                # Early stop if necessary.
-                if early_stop:
-                    print(
-                        f"Early stopping: epoch {epoch}, min val loss {self._min_validation_loss}."
-                    )
-                    break
+                # Train for the given number of epochs.
+                for epoch in tqdm(
+                    range(1, num_epochs + 1),
+                    desc=f"Training QPPNet for {num_epochs} epochs.",
+                ):
+                    # Early stop if necessary.
+                    if early_stop:
+                        print(
+                            f"Early stopping: epoch {epoch}, min val loss {self._min_validation_loss}."
+                        )
+                        break
 
-                # From the paper:
-                # > Plan-based batch training
-                # > To address these challenges, we propose constructing large batches of randomly sampled query plans.
-                # > Within each large batch B, we group together sets of query plans with identical structure,
-                # > i.e. we partition B into equivalence classes c_1, c_2, ..., c_n based on plan's tree structure,
-                # > such that U_{i=1}^{n} c_{i} = B.
-                # With that said, the paper doesn't seem to actually use batch training most of the time.
-                # Instead, it takes full passes over all the training queries.
-                # Either way, we define the batch here.
-                if self._batch_size is None:
-                    batch = df
-                elif force_stratify:
-                    batch, _ = self.split(
-                        df,
-                        min_train_size=self._batch_size,
-                        random_state=self._random_state,
-                    )
-                else:
-                    randomly_sampled_query_plans = np.random.choice(
-                        df["Query Num"].unique(), size=self._batch_size, replace=False
-                    )
-                    batch = df[df["Query Num"].isin(randomly_sampled_query_plans)]
-                equivalence_classes = batch.groupby("Query Hash")
-
-                # Zero out previous gradients.
-                for optimizer in self._optimizers.values():
-                    optimizer.zero_grad()
-
-                # For each class, take a forward pass using this batch.
-                pbar = tqdm(
-                    total=len(batch),
-                    leave=False,
-                    desc="Forward pass through batch.",
-                )
-                class_losses: dict[NeuralUnitId, list] = {}
-                for _, gdf in equivalence_classes:
-                    # Cache the output of neural units as the output of children will be used as input to parent nodes.
-                    output_cache = {}
-                    # Sort by observation index descending to generate children first.
-                    gdf = gdf.sort_values("Observation Index", ascending=False)
-                    # Forward pass on every model.
-                    for node_type, obs_idx, children_idxs, features, actual_time in zip(
-                        gdf["Node Type"],
-                        gdf["Observation Index"],
-                        gdf["Children Observation Indexes"],
-                        gdf["Features"],
-                        gdf["Actual Total Time (us)"],
-                    ):
-                        neural_unit_id = NeuralUnitId(node_type, len(children_idxs))
-
-                        # Form the input vector for this neural unit.
-                        input_vector = []
-                        input_vector.extend(features)
-                        for child_idx in children_idxs:
-                            assert (
-                                child_idx in output_cache
-                            ), f"While computing {obs_idx}, {child_idx} not cached?"
-                            input_vector.extend(output_cache[child_idx])
-                        input_vector = torch.tensor(input_vector)
-
-                        # Run the model.
-                        model = self._neural_units[neural_unit_id]
-                        output = model.forward(input_vector)
-                        output_cache[obs_idx] = output
-
-                        # From the paper,
-                        # >  The first element of the output vector represents the neural unit's estimation
-                        # > of the operator's latency, denoted as p_a[l].
-                        # > The remaining d elements represent the data vector, denoted as p_a[d].
-                        estimated_latency = output[0]
-                        loss = (estimated_latency - actual_time) ** 2
-
-                        if neural_unit_id not in class_losses:
-                            class_losses[neural_unit_id] = []
-                        class_losses[neural_unit_id].append(loss)
-                        pbar.update()
-                pbar.close()
-
-                # Update the gradients.
-                pbar = tqdm(
-                    total=len(class_losses),
-                    leave=False,
-                    desc="Backward pass through batch.",
-                )
-                num_losses_total = sum(len(losses) for losses in class_losses.values())
-                for neural_unit_id, losses in class_losses.items():
-                    # Compute the loss according to Eq. (7) in Section 5, aka RMSE.
-                    # However, for differentiability reasons we just use MSE here.
-                    num_losses_node_type = len(losses)
-                    batch_loss = torch.mean(torch.stack(losses))
-                    scaling_factor = num_losses_node_type / num_losses_total
-                    batch_loss.backward(torch.ones_like(batch_loss) * scaling_factor)
-                    # TODO(WAN): It appears that gradient clipping may be necessary. TBD.
-                    # torch.nn.utils.clip_grad_value_(
-                    #   self._neural_units[neural_unit_id].model.parameters(),
-                    #   clip_value=1000000
-                    # )
-                    # Update the gradients.
-                    self._optimizers[neural_unit_id].step()
-                    if self._schedulers[neural_unit_id] is not None:
-                        self._schedulers[neural_unit_id].step()
-                    pbar.update()
-                pbar.close()
-
-                should_save = (epoch_save_interval is not None) and (
-                    epoch % epoch_save_interval == 0
-                )
-                # Compute the validation loss if necessary.
-                validation_loss = None
-                if validation_df is not None:
-                    eval_vdf = self.evaluate(df=validation_df, leave_tqdm=False)
-                    validation_loss = QPPNet.calculate_root_mean_square_error(eval_vdf)
-                    threshold = self._min_validation_loss + self._patience_improvement
-                    # Update patience, set early stop if necessary.
-                    if validation_loss < threshold:
-                        # Validation loss is improving fast enough, reset patience.
-                        patience = self._patience
+                    # From the paper:
+                    # > Plan-based batch training
+                    # > To address these challenges, we propose constructing large batches of randomly sampled query plans.
+                    # > Within each large batch B, we group together sets of query plans with identical structure,
+                    # > i.e. we partition B into equivalence classes c_1, c_2, ..., c_n based on plan's tree structure,
+                    # > such that U_{i=1}^{n} c_{i} = B.
+                    # With that said, the paper doesn't seem to actually use batch training most of the time.
+                    # Instead, it takes full passes over all the training queries.
+                    # Either way, we define the batch here.
+                    if self._batch_size is None:
+                        batch = df
+                    elif force_stratify:
+                        batch, _ = self.split(
+                            df,
+                            min_train_size=self._batch_size,
+                            random_state=self._random_state,
+                        )
                     else:
-                        # Validation loss is not improving fast enough.
-                        patience -= 1
-                        if patience == 0 and (
-                            self._patience_min_epochs is None
-                            or epoch >= self._patience_min_epochs
+                        randomly_sampled_query_plans = np.random.choice(
+                            df["Query Num"].unique(), size=self._batch_size, replace=False
+                        )
+                        batch = df[df["Query Num"].isin(randomly_sampled_query_plans)]
+                    equivalence_classes = batch.groupby("Query Hash")
+
+                    # Zero out previous gradients.
+                    for optimizer in self._optimizers.values():
+                        optimizer.zero_grad()
+
+                    # For each class, take a forward pass using this batch.
+                    pbar = tqdm(
+                        total=len(batch),
+                        leave=False,
+                        desc="Forward pass through batch.",
+                    )
+                    class_losses: dict[NeuralUnitId, list] = {}
+                    for _, gdf in equivalence_classes:
+                        # Cache the output of neural units as the output of children will be used as input to parent nodes.
+                        output_cache = {}
+                        # Sort by observation index descending to generate children first.
+                        gdf = gdf.sort_values("Observation Index", ascending=False)
+                        # Forward pass on every model.
+                        for node_type, obs_idx, children_idxs, features, actual_time in zip(
+                            gdf["Node Type"],
+                            gdf["Observation Index"],
+                            gdf["Children Observation Indexes"],
+                            gdf["Features"],
+                            gdf["Actual Total Time (us)"],
                         ):
-                            early_stop = True
-                    # Update validation loss.
-                    if validation_loss < self._min_validation_loss:
-                        self._min_validation_loss = validation_loss
-                        should_save = True
-                # Save the weights if necessary.
-                if should_save:
-                    metrics_str = ""
-                    if validation_loss is not None:
-                        metrics_str += f"validationloss_{validation_loss:.3f}"
-                    self.save_weights(epoch, metrics_str)
+                            neural_unit_id = NeuralUnitId(node_type, len(children_idxs))
+
+                            # Form the input vector for this neural unit.
+                            input_vector = torch.tensor(features)
+                            for child_idx in children_idxs:
+                                assert (
+                                    child_idx in output_cache
+                                ), f"While computing {obs_idx}, {child_idx} not cached?"
+                                input_vector = torch.cat((input_vector, output_cache[child_idx]))
+
+                            # Run the model.
+                            model = self._neural_units[neural_unit_id]
+                            output = model.forward(input_vector)
+                            output_cache[obs_idx] = output.clone()
+
+                            if any(output.detach().isnan()):
+                                breakpoint()
+
+                            # From the paper,
+                            # >  The first element of the output vector represents the neural unit's estimation
+                            # > of the operator's latency, denoted as p_a[l].
+                            # > The remaining d elements represent the data vector, denoted as p_a[d].
+                            estimated_latency = output[0]
+                            loss = (estimated_latency - actual_time) ** 2
+
+                            if neural_unit_id not in class_losses:
+                                class_losses[neural_unit_id] = []
+                            class_losses[neural_unit_id].append(loss)
+                            pbar.update()
+                    pbar.close()
+
+                    # Update the gradients.
+                    pbar = tqdm(
+                        total=len(class_losses),
+                        leave=False,
+                        desc="Backward pass through batch.",
+                    )
+                    num_losses_total = sum(len(losses) for losses in class_losses.values())
+                    for neural_unit_id, losses in class_losses.items():
+                        # Compute the loss according to Eq. (7) in Section 5, aka RMSE.
+                        # However, for differentiability reasons we just use MSE here.
+                        num_losses_node_type = len(losses)
+                        batch_loss = torch.mean(torch.stack(losses))
+                        scaling_factor = num_losses_node_type / num_losses_total
+                        print("loss ", batch_loss, scaling_factor, batch_loss * scaling_factor)
+                        batch_loss.backward(torch.ones_like(batch_loss) * scaling_factor)
+                        # TODO(WAN): It appears that gradient clipping may be necessary. TBD.
+                        # torch.nn.utils.clip_grad_value_(
+                        #   self._neural_units[neural_unit_id].model.parameters(),
+                        #   clip_value=1000000
+                        # )
+                        # Update the gradients.
+                        self._optimizers[neural_unit_id].step()
+                        # for p in self._neural_units[neural_unit_id].model.parameters():
+                        #     print(neural_unit_id, p.grad)
+                        if self._schedulers[neural_unit_id] is not None:
+                            self._schedulers[neural_unit_id].step()
+                        pbar.update()
+                    pbar.close()
+
+                    should_save = (epoch_save_interval is not None) and (
+                        epoch % epoch_save_interval == 0
+                    )
+                    # Compute the validation loss if necessary.
+                    validation_loss = None
+                    if validation_df is not None:
+                        eval_vdf = self.evaluate(df=validation_df, leave_tqdm=False)
+                        validation_loss = QPPNet.calculate_root_mean_square_error(eval_vdf)
+                        threshold = self._min_validation_loss + self._patience_improvement
+                        # Update patience, set early stop if necessary.
+                        if validation_loss < threshold:
+                            # Validation loss is improving fast enough, reset patience.
+                            patience = self._patience
+                        else:
+                            # Validation loss is not improving fast enough.
+                            patience -= 1
+                            if patience == 0 and (
+                                self._patience_min_epochs is None
+                                or epoch >= self._patience_min_epochs
+                            ):
+                                early_stop = True
+                        # Update validation loss.
+                        if validation_loss < self._min_validation_loss:
+                            self._min_validation_loss = validation_loss
+                            should_save = True
+                    # Save the weights if necessary.
+                    if should_save:
+                        metrics_str = ""
+                        if validation_loss is not None:
+                            metrics_str += f"validationloss_{validation_loss:.3f}"
+                        self.save_weights(epoch, metrics_str)
+        except RuntimeError as e:
+            print(e)
+            breakpoint()
 
     def evaluate(
         self, df: Optional[pd.DataFrame] = None, leave_tqdm: bool = True
@@ -602,7 +610,7 @@ class NeuralUnit(nn.Module):
         output_size = PaperConstants.DATA_OUTPUT_SIZE
 
         model = [nn.Linear(input_dim, hidden_size), nn.ReLU()]
-        for _ in range(num_hidden_layers):
+        for _ in range(num_hidden_layers - 2):
             model.append(nn.Linear(hidden_size, hidden_size))
             model.append(nn.ReLU())
         model.append(nn.Linear(hidden_size, output_size))
