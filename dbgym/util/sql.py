@@ -1,6 +1,5 @@
 import pglast
 
-
 def substitute(query, params, onerror="raise"):
     # Consider '$2' -> "abc'def'ghi".
     # This necessitates the use of a SQL-aware substitution,
@@ -14,6 +13,7 @@ def substitute(query, params, onerror="raise"):
             raise ValueError(message)
         print(message)
         return ""
+
     for token in tokens:
         token_str = str(query[token.start : token.end + 1])
         if token.start > last_end:
@@ -27,13 +27,7 @@ def substitute(query, params, onerror="raise"):
                     raise ValueError(message)
                 print(message)
                 return ""
-            pval = params[token_str]
-            try:
-                assert pval[0] == "'" and pval[-1] == "'", "Not quoted?"
-                # Remove quoting if the value looks numeric.
-                pval = str(float(pval[1:-1]))
-            except ValueError:
-                pass
+            pval = str(params[token_str])
             new_sql.append(pval)
         else:
             new_sql.append(token_str)

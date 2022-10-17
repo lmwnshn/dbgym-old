@@ -29,9 +29,7 @@ class IndexSpace(spaces.Tuple):
                         table_name: spaces.Dict(
                             {
                                 column["name"]: spaces.Discrete(2, seed=seed)
-                                for column in gym_spec.snapshot["schemas"][schema_name][
-                                    table_name
-                                ]["columns"]
+                                for column in gym_spec.snapshot["schemas"][schema_name][table_name]["columns"]
                             },
                             seed=seed,
                         )
@@ -47,12 +45,8 @@ class IndexSpace(spaces.Tuple):
         # TODO(WAN):
         #   I think it may make sense to impose a cap on the number of attributes that
         #   will be indexed, say 5, so that this doesn't get blown up by some ridiculous table.
-        max_num_attributes = max(
-            [len(attrs["columns"]) for _, _, attrs in self._gym_spec.schema_summary]
-        )
-        index_order_space = spaces.MultiDiscrete(
-            [max_num_attributes] * max_num_attributes, seed=seed
-        )
+        max_num_attributes = max([len(attrs["columns"]) for _, _, attrs in self._gym_spec.schema_summary])
+        index_order_space = spaces.MultiDiscrete([max_num_attributes] * max_num_attributes, seed=seed)
 
         super().__init__(spaces=[index_schema_space, index_order_space], seed=seed)
 
@@ -65,15 +59,11 @@ class IndexSpace(spaces.Tuple):
         # Note that this may end up picking nothing -- very low chance of this happening though.
         if schema_mask is None:
             schema_name, table_name, _ = random.choice(self._gym_spec.schema_summary)
-            schema_mask = self.make_schema_mask(
-                schema_name=schema_name, table_name=table_name
-            )
+            schema_mask = self.make_schema_mask(schema_name=schema_name, table_name=table_name)
         # Next, instantiate an index to sample by picking attributes out of a schema.
         schema = self.spaces[0].sample(schema_mask)
         # Then, generate an ordering for the picked schema attributes.
-        order_value = (
-            order_value if order_value is not None else self.make_order_value(schema)
-        )
+        order_value = order_value if order_value is not None else self.make_order_value(schema)
         return schema, order_value
 
     def make_schema_mask(self, schema_name=None, table_name=None, column_name=None):
@@ -83,24 +73,12 @@ class IndexSpace(spaces.Tuple):
             mask[_schema_name] = {}
             for _table_name in gym_spec.snapshot["schemas"][_schema_name]:
                 mask[_schema_name][_table_name] = {}
-                for _column in gym_spec.snapshot["schemas"][_schema_name][_table_name][
-                    "columns"
-                ]:
-                    matches_schema = schema_name is None or (
-                        schema_name is not None and _schema_name == schema_name
-                    )
-                    matches_table = table_name is None or (
-                        table_name is not None and _table_name == table_name
-                    )
-                    matches_column = column_name is None or (
-                        column_name is not None and _column["name"] == column_name
-                    )
-                    action_possible = (
-                        matches_schema and matches_table and matches_column
-                    )
-                    mask[_schema_name][_table_name][_column["name"]] = np.array(
-                        [1, action_possible], dtype=np.int8
-                    )
+                for _column in gym_spec.snapshot["schemas"][_schema_name][_table_name]["columns"]:
+                    matches_schema = schema_name is None or (schema_name is not None and _schema_name == schema_name)
+                    matches_table = table_name is None or (table_name is not None and _table_name == table_name)
+                    matches_column = column_name is None or (column_name is not None and _column["name"] == column_name)
+                    action_possible = matches_schema and matches_table and matches_column
+                    mask[_schema_name][_table_name][_column["name"]] = np.array([1, action_possible], dtype=np.int8)
         return mask
 
     def make_order_value(self, schema):

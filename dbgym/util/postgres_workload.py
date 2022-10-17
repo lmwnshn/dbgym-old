@@ -8,8 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pglast
-from sqlalchemy import (Column, Integer, String, Table, create_engine, insert,
-                        text)
+from sqlalchemy import Column, Integer, String, Table, create_engine, insert, text
 from tqdm import tqdm
 
 from dbgym.util.sql import substitute
@@ -65,8 +64,8 @@ def _read_postgresql_csvlog(pg_csvlog):
     extended = r"^execute .+: ([\s\S]*)"
     regex = f"(?:{simple})|(?:{extended})"
 
-    with tqdm(total=5, desc="Processing CSVLOG into DataFrame.") as pbar:
-        with tqdm(desc="Extracting query templates."):
+    with tqdm(total=5, desc="Processing CSVLOG into DataFrame.", leave=False) as pbar:
+        with tqdm(desc="Extracting query templates.", leave=False):
             query = df["message"].str.extract(regex, flags=re.IGNORECASE)
             # Combine the capture groups for simple and extended query protocol.
             query = query[0].fillna(query[1])
@@ -76,19 +75,17 @@ def _read_postgresql_csvlog(pg_csvlog):
             df["query_raw"] = query
         pbar.update(1)
 
-        with tqdm(desc="Extracting parameters."):
+        with tqdm(desc="Extracting parameters.", leave=False):
             df["params"] = df["detail"].apply(_extract_params)
         pbar.update(1)
 
-        with tqdm(desc="Substituting parameters back into query."):
+        with tqdm(desc="Substituting parameters back into query.", leave=False):
             # TODO(WAN): You _could_ do the hacky thing for queries without $.
-            df["query_subst"] = df[["query_raw", "params"]].apply(
-                _substitute_row, axis=1
-            )
+            df["query_subst"] = df[["query_raw", "params"]].apply(_substitute_row, axis=1)
             df = df.drop(columns=["query_raw", "params"])
         pbar.update(1)
 
-        with tqdm(desc="Re-parsing query."):
+        with tqdm(desc="Re-parsing query.", leave=False):
             template_param = df["query_subst"].apply(_parse)
             df = df.assign(
                 query_template=template_param.map(lambda x: x[0]),
@@ -97,7 +94,7 @@ def _read_postgresql_csvlog(pg_csvlog):
             df = df[df["query_template"].astype(bool)].copy().reset_index()
         pbar.update(1)
 
-        with tqdm(desc="Adding minor changes."):
+        with tqdm(desc="Adding minor changes.", leave=False):
             df["query_template"] = df["query_template"].astype("category")
             start_time = df.iloc[0]["log_time"]
             df["elapsed_s"] = (df["log_time"] - start_time).dt.total_seconds()
@@ -153,9 +150,9 @@ def _parse(sql):
             if new_sql[-2] == "-":
                 del new_sql[-2]
                 token_str = f"-{token_str}"
-            # Quote for consistency.
-            if token_str[0] != "'" and token_str[-1] != "'":
-                token_str = f"'{token_str}'"
+            # # Quote for consistency.
+            # if token_str[0] != "'" and token_str[-1] != "'":
+            #     token_str = f"'{token_str}'"
             params.append(token_str)
         else:
             new_sql.append(token_str)
@@ -165,9 +162,7 @@ def _parse(sql):
 
 
 def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
-    assert (
-        postgresql_csvlog_path.suffix == ".csv"
-    ), f"CSVLOG format? {postgresql_csvlog_path}"
+    assert postgresql_csvlog_path.suffix == ".csv", f"CSVLOG format? {postgresql_csvlog_path}"
 
     Path(save_path).unlink(missing_ok=True)
     workload_id = 1
@@ -191,17 +186,10 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
             del insert_batch[key]
 
     categories = df["query_template"].dtype.categories
-    templates = {
-        query_template: template_id
-        for template_id, query_template in enumerate(categories, 1)
-    }
-    for query_template, template_id in tqdm(
-        templates.items(), total=len(templates), desc="Writing out templates."
-    ):
+    templates = {query_template: template_id for template_id, query_template in enumerate(categories, 1)}
+    for query_template, template_id in tqdm(templates.items(), total=len(templates), desc="Writing out templates."):
         try_insert("query_template", (template_id, query_template))
-        num_params = len(
-            df[df["query_template"] == query_template].iloc[0]["query_params"]
-        )
+        num_params = len(df[df["query_template"] == query_template].iloc[0]["query_params"])
         if num_params > 0:
             params = [Column(f"param_{i}", String) for i in range(1, num_params + 1)]
             query_template_table = Table(
@@ -222,25 +210,16 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
         params_id = None
         if len(query_params) > 0:
             params_tup = tuple(query_params)
-            if (
-                template_id in template_params_map
-                and params_tup in template_params_map[template_id]
-            ):
+            if template_id in template_params_map and params_tup in template_params_map[template_id]:
                 params_id = template_params_map[template_id][params_tup]
             else:
-                template_params_map[template_id] = template_params_map.get(
-                    template_id, {}
-                )
-                template_params_map[template_id][params_tup] = (
-                    len(template_params_map[template_id]) + 1
-                )
+                template_params_map[template_id] = template_params_map.get(template_id, {})
+                template_params_map[template_id][params_tup] = len(template_params_map[template_id]) + 1
                 params_id = template_params_map[template_id][params_tup]
                 params_table = f"template_{template_id}_params"
                 try_insert(params_table, (params_id, *query_params))
 
-        try_insert(
-            "workload", (workload_id, query_num, elapsed_s, template_id, params_id)
-        )
+        try_insert("workload", (workload_id, query_num, elapsed_s, template_id, params_id))
 
     keys = list(insert_batch.keys())
     for key in keys:

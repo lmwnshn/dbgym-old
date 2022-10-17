@@ -8,16 +8,16 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import psutil
+import sqlalchemy
 from gym.core import ObsType
 from gym.spaces import Space
-import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection, CursorResult, Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import SingletonThreadPool
 from tqdm import tqdm
 
-from dbgym.spaces.qppnet_features import QPPNetFeatures
+from dbgym.spaces.observations.qppnet.features import QPPNetFeatures
 from dbgym.util.sql import substitute
 
 
@@ -27,16 +27,11 @@ class Work(ABC):
         self.work_query_num = work_query_num
         self.sql_keyword = sql_keyword.lower()
 
-    def execute(
-        self, conn: Connection, sql_prefix: Optional[str] = None
-    ) -> (CursorResult, bool):
+    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> (CursorResult, bool):
         raise NotImplementedError
 
     def try_add_prefix(self, sql_prefix, sql):
-        if (
-            self.sql_keyword not in ["delete", "insert", "select", "update"]
-            or sql_prefix is None
-        ):
+        if self.sql_keyword not in ["delete", "insert", "select", "update"] or sql_prefix is None:
             return sql, False
         return f"{sql_prefix} {sql}", True
 
@@ -49,9 +44,7 @@ class WorkQueryString(Work):
     def __str__(self):
         return f"WQS[{self.query}]"
 
-    def execute(
-        self, conn: Connection, sql_prefix: Optional[str] = None
-    ) -> (CursorResult, bool):
+    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> (CursorResult, bool):
         sql, prefixed = self.try_add_prefix(sql_prefix, self.query)
         return conn.execute(sqlalchemy.text(sql)), prefixed
 
@@ -71,9 +64,7 @@ class WorkQueryPrepare(Work):
     def __str__(self):
         return f"WQP[{self.template_id}, {self.params}]"
 
-    def execute(
-        self, conn: Connection, sql_prefix: Optional[str] = None
-    ) -> (CursorResult, bool):
+    def execute(self, conn: Connection, sql_prefix: Optional[str] = None) -> (CursorResult, bool):
         sql = f"EXECUTE work_{self.template_id}{self._format_params(self.params)}"
         sql, prefixed = self.try_add_prefix(sql_prefix, sql)
         return conn.execute(sqlalchemy.text(sql)), prefixed
@@ -85,9 +76,10 @@ class WorkQueryPrepare(Work):
 
 
 def _should_prepare(template):
-    return False
     startswith = [
         "alter ",
+        "create ",
+        "drop ",
         "set ",
         "show ",
     ]
@@ -101,9 +93,7 @@ def _should_prepare(template):
     ]
     template = template.strip().lower()
     do_not_prepare = template in matches
-    do_not_prepare = do_not_prepare or any(
-        template.startswith(prefix) for prefix in startswith
-    )
+    do_not_prepare = do_not_prepare or any(template.startswith(prefix) for prefix in startswith)
     do_not_prepare = do_not_prepare or any(substr in template for substr in contains)
     return not do_not_prepare
 
@@ -164,6 +154,7 @@ def _generate_work(
 
 def _submission_worker(
     workload_db_path,
+    try_prepare,
     prepare_queue,
     prepare_types_queue,
     work_queue,
@@ -192,7 +183,7 @@ def _submission_worker(
     for result in results:
         template_id, template = result
         all_templates[template_id] = template
-        if _should_prepare(template):
+        if try_prepare and _should_prepare(template):
             prepare_queue.put((template_id, template))
         else:
             assert template_id not in incompatible_templates, "Duplicate template ID?"
@@ -209,18 +200,10 @@ def _submission_worker(
         prepare_types_queue.task_done()
 
     # Get templates without parameters.
-    sql = (
-        "select distinct(template_id) "
-        "from workload where params_id is null "
-        "order by template_id"
-    )
+    sql = "select distinct(template_id) " "from workload where params_id is null " "order by template_id"
     templates_without_params = engine.execute(sql).fetchall()
     # Get templates with parameters.
-    sql = (
-        "select distinct(template_id) "
-        "from workload where params_id is not null "
-        "order by template_id"
-    )
+    sql = "select distinct(template_id) " "from workload where params_id is not null " "order by template_id"
     templates_with_params = engine.execute(sql).fetchall()
 
     # HACK: Use prepare queue to communicate total.
@@ -298,9 +281,6 @@ def _submission_worker(
 
 
 class WorkloadRunner:
-    def __init__(self):
-        pass
-
     def run(
         self,
         workload_db_path: Path,
@@ -308,14 +288,31 @@ class WorkloadRunner:
         obs_space: Space,
         current_observation_idx=0,
         print_errors=False,
+        try_prepare=False,
     ) -> tuple[ObsType, dict]:
+        """
+
+        Parameters
+        ----------
+        workload_db_path: Path
+        engine: Engine
+        obs_space : Space
+            The observation space to generate features for.
+        current_observation_idx:int
+            The current observation index (i.e., the first observation generated will use this index).
+        print_errors:bool
+            True if errors while running the workload should be printed. False otherwise.
+            Note that there may be many errors when transforming or synthesizing workloads.
+
+        Returns
+        -------
+
+        """
         sql_prefix = None
         if isinstance(obs_space, QPPNetFeatures):
             sql_prefix = "EXPLAIN (ANALYZE, FORMAT JSON, VERBOSE) "
 
-        with engine.connect(close_with_result=False).execution_options(
-            autocommit=False
-        ) as conn:
+        with engine.connect(close_with_result=False).execution_options(autocommit=False) as conn:
             observations, info = [], {}
             # Start a worker thread.
             prepare_queue = Queue()
@@ -328,6 +325,7 @@ class WorkloadRunner:
                 target=_submission_worker,
                 args=(
                     workload_db_path,
+                    try_prepare,
                     prepare_queue,
                     prepare_types_queue,
                     work_queue,
@@ -357,9 +355,7 @@ class WorkloadRunner:
                 name, types = result
                 prefix, template_id = name.split("_")
                 assert prefix == "work", f"What prepared statements got added? {result}"
-                assert types.startswith("{") and types.endswith(
-                    "}"
-                ), f"Did they change the format? {types}"
+                assert types.startswith("{") and types.endswith("}"), f"Did they change the format? {types}"
                 template_id = int(template_id)
                 types = types[1:-1].split(",")
                 prepare_types_queue.put((template_id, types))
@@ -385,9 +381,7 @@ class WorkloadRunner:
                                 # observations is a [query_plan] where query_plan = [plan_features_and_time],
                                 # i.e., [[plan_features_and_time]]
                                 assert len(results) == 1, "Multi-query SQL?"
-                                assert (
-                                    len(results[0]) == 1
-                                ), "Multi-column result for EXPLAIN?"
+                                assert len(results[0]) == 1, "Multi-column result for EXPLAIN?"
                                 result_dicts = results[0][0]
                                 for result_dict in result_dicts:
                                     new_observations = obs_space.generate(

@@ -1,3 +1,4 @@
+import datetime
 from collections import OrderedDict
 from typing import Any, Optional
 
@@ -6,7 +7,7 @@ import pandas as pd
 from gym import spaces
 
 from dbgym.envs.gym_spec import GymSpec
-import datetime
+
 
 class QPPNetFeatures(spaces.Sequence):
     _node_types = [
@@ -80,21 +81,15 @@ class QPPNetFeatures(spaces.Sequence):
         gym_spec: GymSpec,
         seed: int = 15721,
     ):
-        assert (
-            len(gym_spec.snapshot["schemas"]) == 1
-        ), "No support for multiple schemas."
+        assert len(gym_spec.snapshot["schemas"]) == 1, "No support for multiple schemas."
         self._gym_spec = gym_spec
-        self._relations = [
-            table_name for _, table_name, _ in self._gym_spec.schema_summary
-        ]
+        self._relations = [table_name for _, table_name, _ in self._gym_spec.schema_summary]
         self._attribute_names = {
             table_name: [column["name"] for column in attributes["columns"]]
             for _, table_name, attributes in self._gym_spec.schema_summary
         }
         self._attribute_stats = {
-            table_name: {
-                column["name"]: column["stats"] for column in attributes["columns"]
-            }
+            table_name: {column["name"]: column["stats"] for column in attributes["columns"]}
             for _, table_name, attributes in self._gym_spec.schema_summary
         }
         self._indexes = [
@@ -102,24 +97,12 @@ class QPPNetFeatures(spaces.Sequence):
             for _, table_name, attrs in self._gym_spec.schema_summary
             for index in attrs["indexes"]
         ]
-        self._max_num_attributes = max(
-            [len(attrs["columns"]) for _, _, attrs in self._gym_spec.schema_summary]
-        )
+        self._max_num_attributes = max([len(attrs["columns"]) for _, _, attrs in self._gym_spec.schema_summary])
         self._num_relations = len(self._relations)
         self._num_indexes = len(self._indexes)
 
-        # ("Actual Total Time", self._singleton(plan_dict["Actual Total Time"])),
-        # ("Children Observation Indexes", output_children_observation_indexes),
-        # ("Features", self._featurize(plan_dict)),
-        # ("Node Type", self._one_hot(self._node_types, plan_dict, "Node Type")),
-        # ("Observation Index", output_observation_index),
-        # ("Query Hash", query_hash),
-        # ("Query Num", self._singleton(query_num, dtype=np.int32)),
-
         space_dict = {
-            "Actual Total Time (ms)": spaces.Box(
-                low=0, high=np.inf, dtype=np.float32, seed=seed
-            ),
+            "Actual Total Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
             "Children Observation Indexes": spaces.Sequence(
                 spaces.Box(low=0, high=np.inf, dtype=np.int64, seed=seed), seed=seed
             ),
@@ -128,21 +111,15 @@ class QPPNetFeatures(spaces.Sequence):
                 seed=seed,
             ),
             "Node Type": spaces.MultiBinary(len(self._node_types), seed=seed),
-            "Observation Index": spaces.Box(
-                low=0, high=np.inf, dtype=np.int64, seed=seed
-            ),
-            "Query Hash": spaces.Sequence(
-                spaces.Discrete(len(self._node_types), seed=seed), seed=seed
-            ),
+            "Observation Index": spaces.Box(low=0, high=np.inf, dtype=np.int64, seed=seed),
+            "Query Hash": spaces.Sequence(spaces.Discrete(len(self._node_types), seed=seed), seed=seed),
             "Query Num": spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed),
         }
         explain_space = spaces.Dict(spaces=space_dict, seed=seed)
         super().__init__(space=explain_space, seed=seed)
 
     def sample(self, mask: Optional[dict[str, Any]] = None) -> dict:
-        raise NotImplementedError(
-            "Sampling this doesn't make sense. Future me problem."
-        )
+        raise NotImplementedError("Sampling this doesn't make sense. Future me problem.")
 
     def generate(self, result_dict, query_num, observation_idx) -> list:
         plan_dict = result_dict["Plan"]
@@ -159,9 +136,7 @@ class QPPNetFeatures(spaces.Sequence):
         if "Plans" in plan_dict:
             for i, plan in enumerate(plan_dict["Plans"]):
                 children_observation_indexes.append(observation_idx)
-                child_observations = self._generate(
-                    plan, query_num, query_hash, observation_idx
-                )
+                child_observations = self._generate(plan, query_num, query_hash, observation_idx)
                 observations.extend(child_observations)
                 observation_idx += len(child_observations)
         output_children_observation_indexes = [
@@ -194,16 +169,10 @@ class QPPNetFeatures(spaces.Sequence):
         # Joins.
         if node_type in ["Hash Join", "Merge Join"]:
             features.extend(self._one_hot(self._join_types, plan_dict, "Join Type"))
-            features.extend(
-                self._one_hot(
-                    self._parent_relationships, plan_dict, "Parent Relationship"
-                )
-            )
+            features.extend(self._one_hot(self._parent_relationships, plan_dict, "Parent Relationship"))
         # Hash.
         elif node_type in ["Hash"]:
-            features.append(
-                plan_dict["Hash Buckets"] if "Hash Buckets" in plan_dict else 0
-            )
+            features.append(plan_dict["Hash Buckets"] if "Hash Buckets" in plan_dict else 0)
             # TODO(WAN): Hash Algorithm
         # Sort.
         elif node_type in ["Sort"]:
@@ -211,9 +180,7 @@ class QPPNetFeatures(spaces.Sequence):
             features.extend(self._one_hot(self._sort_methods, plan_dict, "Sort Method"))
         # Scans.
         elif node_type in ["Seq Scan", "Bitmap Heap Scan"]:
-            output_relation_name, _ = self._featurize_relation_name_index_name(
-                plan_dict
-            )
+            output_relation_name, _ = self._featurize_relation_name_index_name(plan_dict)
             (
                 output_min_vec,
                 output_med_vec,
@@ -239,18 +206,14 @@ class QPPNetFeatures(spaces.Sequence):
             features.extend(output_med_vec)
             features.extend(output_max_vec)
             features.extend(output_index_name)
-            features.extend(
-                self._one_hot(self._scan_directions, plan_dict, "Scan Direction")
-            )
+            features.extend(self._one_hot(self._scan_directions, plan_dict, "Scan Direction"))
         elif node_type in ["Bitmap Index Scan"]:
             _, output_index_name = self._featurize_relation_name_index_name(plan_dict)
             features.extend(output_index_name)
         # Aggregates.
         elif node_type in ["Aggregate"]:
             features.extend(self._one_hot(self._strategies, plan_dict, "Strategy"))
-            features.extend(
-                self._one_hot(self._partial_modes, plan_dict, "Partial Mode")
-            )
+            features.extend(self._one_hot(self._partial_modes, plan_dict, "Partial Mode"))
         # TODO(WAN): Operator
 
         return [self._singleton(x) for x in features]
@@ -273,8 +236,7 @@ class QPPNetFeatures(spaces.Sequence):
                     for idx, attr_name in enumerate(attributes):
                         if attr_name in target:
                             min_val, med_val, max_val = [
-                                self._attribute_stats[rel_name][attr_name][x]
-                                for x in ["min", "median", "max"]
+                                self._attribute_stats[rel_name][attr_name][x] for x in ["min", "median", "max"]
                             ]
                             # TODO(WAN): string support? We didn't handle this before either AFAIK.
                             if type(min_val) == str:
@@ -308,9 +270,7 @@ class QPPNetFeatures(spaces.Sequence):
                 if "Index Name" in plan_dict:
                     index_name = plan_dict["Index Name"]
                     if not index_name.startswith("pg_"):
-                        output_index_name[
-                            self._indexes.index((rel_name, index_name))
-                        ] = 1
+                        output_index_name[self._indexes.index((rel_name, index_name))] = 1
         return output_relation_name, output_index_name
 
     def _featurize_sort_key(self, plan_dict):
@@ -326,13 +286,8 @@ class QPPNetFeatures(spaces.Sequence):
                     if subkey != " " and "." in subkey:
                         rel_name, attr_name = subkey.split(" ")[0].split(".")
                         if rel_name in self._relations:
-                            table_index = (
-                                self._relations.index(rel_name)
-                                * self._max_num_attributes
-                            )
-                            attr_index = self._attribute_names[rel_name].index(
-                                attr_name
-                            )
+                            table_index = self._relations.index(rel_name) * self._max_num_attributes
+                            attr_index = self._attribute_names[rel_name].index(attr_name)
                             sort_key[table_index + attr_index] = 1
         return sort_key
 
@@ -345,9 +300,7 @@ class QPPNetFeatures(spaces.Sequence):
         arr = [0 for _ in valid_choices]
         if key in plan_dict:
             val = plan_dict[key]
-            assert (
-                val in valid_choices
-            ), f"What's this? {valid_choices} {plan_dict} {key}"
+            assert val in valid_choices, f"What's this? {valid_choices} {plan_dict} {key}"
             val_idx = valid_choices.index(plan_dict[key])
         else:
             assert "invalid" in valid_choices
@@ -369,17 +322,13 @@ class QPPNetFeatures(spaces.Sequence):
                 if (lens == 1).all():
                     # If this is a Box shape, [x], then unwrap the ndarray value.
                     df[col] = df[col].apply(lambda arr: arr.item())
-                elif len(df[col].iloc[lens.argmax()]) > 0 and _is_listlike(
-                    df[col].iloc[lens.argmax()]
-                ):
+                elif len(df[col].iloc[lens.argmax()]) > 0 and _is_listlike(df[col].iloc[lens.argmax()]):
                     # Otherwise, this may be a Seq(Box) shape, [[x], [y]], so try flattening that.
                     df[col] = df[col].apply(lambda arr: np.array(arr).flatten())
 
         # Convert the one-hot node type encoding to the name of the node type.
         if convert_node_type:
-            df["Node Type"] = df["Node Type"].apply(
-                lambda onehot: QPPNetFeatures._node_types[onehot.argmax()]
-            )
+            df["Node Type"] = df["Node Type"].apply(lambda onehot: QPPNetFeatures._node_types[onehot.argmax()])
 
         # Explode out arrays in columns.
         if explode:
@@ -391,9 +340,7 @@ class QPPNetFeatures(spaces.Sequence):
                     df[col] = df[col].apply(lambda x: np.array(x).flatten())
                     if not (lens == max_len).all():
                         # Pad.
-                        df[col] = df[col].apply(
-                            lambda arr: np.pad(arr, (0, max_len - arr.shape[0]))
-                        )
+                        df[col] = df[col].apply(lambda arr: np.pad(arr, (0, max_len - arr.shape[0])))
                     new_cols = [f"{col}_{i}" for i in range(1, max_len + 1)]
                     df[new_cols] = pd.DataFrame(df[col].tolist(), index=df.index)
                     del df[col]
@@ -406,9 +353,7 @@ class QPPNetFeatures(spaces.Sequence):
         for cat in [
             "Query Hash",
         ]:
-            df[cat] = df[cat].apply(
-                tuple
-            )  # .astype("category") # pending pyarrow support for nested dicts
+            df[cat] = df[cat].apply(tuple)  # .astype("category") # pending pyarrow support for nested dicts
 
         df["Actual Total Time (us)"] = df["Actual Total Time (ms)"] * 1000
         del df["Actual Total Time (ms)"]

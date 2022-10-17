@@ -41,7 +41,7 @@ class Trainer(ABC):
 
 
 class PostgresTrainer(Trainer):
-    def __init__(self, gym_spec: GymSpec, seed=15721):
+    def __init__(self, gym_spec: GymSpec, seed=15721, hack=False):
         super().__init__(gym_spec, seed)
         # TODO(WAN): These should be moved into the gym specification for a PostgreSQL database.
         self._cluster_version = "14"
@@ -55,22 +55,21 @@ class PostgresTrainer(Trainer):
         self._db_user = "gym_user"
         self._db_pass = "gym_pass"
 
-        # TODO(WAN): This is a hacky way of going about things.
-        if self._gym_spec.snapshot is None:
-            engine = create_engine(self.get_target_dbms_connstr_sqlalchemy())
-            inspector = inspect(engine)
-            self._gym_spec.snapshot_db(engine, inspector)
-        return
-        # TODO(WAN): hack, create and delete target DBMS to populate snapshot.
-        if self._gym_spec.snapshot is None:
-            self.create_target_dbms()
-            self.delete_target_dbms()
+        self._hack = hack
+        if self._hack:
+            # TODO(WAN): This is a slightly hacky way of going about things.
+            if self._gym_spec.snapshot is None:
+                engine = create_engine(self.get_target_dbms_connstr_sqlalchemy())
+                inspector = inspect(engine)
+                self._gym_spec.snapshot_db(engine, inspector)
+
 
     def get_target_dbms_connstr_sqlalchemy(self) -> str:
         return f"postgresql+psycopg2://{self._db_user}:{self._db_pass}@{self._cluster_host}:{self._cluster_port}/{self._db_name}"
 
     def create_target_dbms(self):
-        return
+        if self._hack:
+            return
         # Setup cluster.
         if self._test_cluster_exists():
             self.delete_target_dbms()
@@ -113,7 +112,8 @@ class PostgresTrainer(Trainer):
         self._restore_from_state()
 
     def delete_target_dbms(self):
-        return
+        if self._hack:
+            return
         sudo[pg_dropcluster["--stop", self._cluster_version, self._cluster_name]].run()
 
     def _start_target_dbms(self):
@@ -145,9 +145,7 @@ class PostgresTrainer(Trainer):
         retcode, stdout, _ = pg_lsclusters["-j"].run()
         assert retcode == 0, "Couldn't list existing clusters."
         clusters = json.loads(stdout)
-        cluster_exists = any(
-            [cluster["cluster"] == "gymcluster" for cluster in clusters]
-        )
+        cluster_exists = any([cluster["cluster"] == "gymcluster" for cluster in clusters])
         return cluster_exists
 
     def _run_sql(self, sql, as_postgres=False):
@@ -231,9 +229,7 @@ class PostgresTrainer(Trainer):
                     raise RuntimeError("pg_isready failed.")
 
     def _restore_from_state(self):
-        assert isinstance(
-            self._gym_spec.historical_state, PostgresState
-        ), "Invalid state."
+        assert isinstance(self._gym_spec.historical_state, PostgresState), "Invalid state."
         pg_state: PostgresState = self._gym_spec.historical_state
 
         with local.env(PGPASSWORD=self._db_pass):
@@ -259,7 +255,7 @@ class PostgresTrainer(Trainer):
                 pg_state._historical_state_path,
             ].run()
 
-        # TODO(WAN): This is a hacky way of going about things.
+        # TODO(WAN): This is a slightly hacky way of going about things.
         if self._gym_spec.snapshot is None:
             engine = create_engine(self.get_target_dbms_connstr_sqlalchemy())
             inspector = inspect(engine)

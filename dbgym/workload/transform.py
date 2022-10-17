@@ -10,7 +10,20 @@ class WorkloadTransform(ABC):
     def __init__(self, name: str):
         self.name = name
 
-    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path) -> None:
+        """
+        Transform ("corrupt") the test workload, writing results into the specified output file.
+        Note that the train workload is NOT included in the output DB file.
+
+        Parameters
+        ----------
+        workload_train_path: Path
+            Path to the DB file representing the train workload.
+        workload_test_path: Path
+            Path to the DB file representing the test workload.
+        output_db_path: Path
+            Path to the DB file where the transformed test workload should be written.
+        """
         raise NotImplementedError
 
     def __str__(self):
@@ -21,7 +34,7 @@ class PerfectPrediction(WorkloadTransform):
     def __init__(self):
         super().__init__(f"PerfectPrediction")
 
-    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path) -> None:
         shutil.copy(workload_test_path, output_db_path)
 
 
@@ -29,7 +42,7 @@ class OnlyUniqueQueries(WorkloadTransform):
     def __init__(self):
         super().__init__(f"OnlyUnique")
 
-    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path) -> None:
         shutil.copy(workload_test_path, output_db_path)
         engine = create_engine(f"sqlite:///{output_db_path}")
         df = pd.read_sql("SELECT * FROM workload", engine)
@@ -43,7 +56,7 @@ class SampleFracQueries(WorkloadTransform):
         self._frac = frac
         self._random_state = random_state
 
-    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path) -> None:
         shutil.copy(workload_test_path, output_db_path)
         engine = create_engine(f"sqlite:///{output_db_path}")
         df = pd.read_sql("SELECT * FROM workload", engine)
@@ -53,15 +66,13 @@ class SampleFracQueries(WorkloadTransform):
 
 class ParamSubstitution(WorkloadTransform):
     def __init__(self, name: str, func, unquote=True, numeric=True):
-        assert (
-            func is not None
-        ), "Provide a substitution function of type pd.Series -> assignable to pd.Series."
+        assert func is not None, "Provide a substitution function of type pd.Series -> assignable to pd.Series."
         super().__init__(name)
         self._func = func
         self._unquote = unquote
         self._numeric = numeric
 
-    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path):
+    def transform(self, workload_train_path: Path, workload_test_path: Path, output_db_path: Path) -> None:
         shutil.copy(workload_test_path, output_db_path)
         engine = create_engine(f"sqlite:///{output_db_path}")
         inspector = inspect(engine)

@@ -2,10 +2,13 @@ import argparse
 from pathlib import Path
 from random import Random
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--workloads", required=True, help="Comma-separated list of workloads to run.")
-    parser.add_argument("--root_workload_dir", default="./artifact/dsb/workload", help="Root directory of all workloads.")
+    parser.add_argument(
+        "--root_workload_dir", default="./artifact/dsb/workload", help="Root directory of all workloads."
+    )
     parser.add_argument("--seed", default=15721, help="Random seed.")
     args = parser.parse_args()
 
