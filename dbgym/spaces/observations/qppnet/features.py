@@ -5,6 +5,7 @@ from typing import Any, Optional
 import numpy as np
 import pandas as pd
 from gym import spaces
+from sklearn.preprocessing import MinMaxScaler
 
 from dbgym.envs.gym_spec import GymSpec
 
@@ -361,3 +362,33 @@ class QPPNetFeatures(spaces.Sequence):
         # Defragment the df.
         df = df.copy()
         return df
+
+    @staticmethod
+    def normalize_observations_df(observations, scalers:Optional[dict[str, MinMaxScaler]]=None):
+        df = observations.copy()
+        groups = df.groupby("Node Type")
+        if scalers is None:
+            scalers = {}
+        for node_type, gdf in groups:
+            feat_s = gdf["Features"]
+            feat_df = pd.DataFrame.from_dict(dict(zip(feat_s.index, feat_s.values)), orient="index")
+            if node_type in scalers:
+                scaler = scalers[node_type]
+                transformed_df = pd.DataFrame(scaler.transform(feat_df), index=feat_df.index)
+            else:
+                scaler = MinMaxScaler()
+                transformed_df = pd.DataFrame(scaler.fit_transform(feat_df), index=feat_df.index)
+                scalers[node_type] = scaler
+            transformed_s = transformed_df.apply(lambda x: list(x), axis=1)
+            df.loc[transformed_s.index, "Features"] = transformed_s
+
+        node_type = "Fake_ActualTime"
+        if node_type in scalers:
+            scaler = scalers[node_type]
+            df["Actual Total Time (scaled)"] = scaler.transform(df["Actual Total Time (us)"].values.reshape(-1, 1))
+        else:
+            scaler = MinMaxScaler()
+            df["Actual Total Time (scaled)"] = scaler.fit_transform(df["Actual Total Time (us)"].values.reshape(-1, 1))
+            scalers[node_type] = scaler
+
+        return df, scalers

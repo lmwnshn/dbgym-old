@@ -4,6 +4,7 @@ from typing import Optional
 
 import gym
 import pandas as pd
+import pickle
 
 from dbgym.envs.gym_spec import GymSpec
 from dbgym.envs.state import PostgresState
@@ -57,7 +58,7 @@ for config in experiment_configs:
     # workload_manager.add_transform(ParamSubstitution("max", lambda series: f"'{series.max()}'"))
     # workload_manager.add_transform(ParamSubstitution("min", lambda series: f"'{series.min()}'"))
 
-    train_df, test_df, validation_df = None, None, None
+    train_df, test_df, validation_df, scalers = None, None, None, None
     experiment_workloads = workload_manager.generate_experiment_workloads()
     ppbar = tqdm(total=len(experiment_workloads), desc="Iterating over experiment workloads.", leave=False)
     for experiment_workload in experiment_workloads:
@@ -94,11 +95,19 @@ for config in experiment_configs:
         if experiment_workload.name == "OnlyTest":
             test_df = pd.read_parquet(observations_path)
             test_df["Query Hash"] = test_df["Query Hash"].apply(tuple)
+            test_df, scalers = QPPNetFeatures.normalize_observations_df(test_df)
+            with open(observations_path.parent / "scalers.pkl", "wb") as f:
+                pickle.dump(scalers, f)
             _, validation_df = QPPNet.split(test_df, min_test_size=4096, random_state=15721)
+            # validation_df = test_df
             continue
 
         train_df = pd.read_parquet(observations_path)
         train_df["Query Hash"] = train_df["Query Hash"].apply(tuple)
+        assert scalers is not None
+        train_df, scalers = QPPNetFeatures.normalize_observations_df(train_df, scalers=scalers)
+        with open(observations_path.parent / "scalers.pkl", "wb") as f:
+            pickle.dump(scalers, f)
 
         destination_folder = config.save_path / experiment_workload.name / "qppnet"
         destination_folder.mkdir(parents=True, exist_ok=True)
@@ -107,11 +116,11 @@ for config in experiment_configs:
             train_df,
             test_df,
             save_folder=destination_folder,
-            batch_size=256,
+            batch_size=128,
             num_epochs=1000,
             patience=5,
             patience_min_epochs=None,
-            validation_size=4096,
+            learning_rate=0.1,
         )
         model.train(epoch_save_interval=100, validation_df=validation_df)
 

@@ -62,6 +62,7 @@ class QPPNet:
         patience_improvement: Optional[float] = 1e-3,
         patience_min_epochs: Optional[int] = 1000,
         num_epochs: int = PaperConstants.NUM_EPOCHS,
+        learning_rate:float = PaperConstants.LEARNING_RATE,
     ):
         self._train_df: pd.DataFrame = train_df
         self._test_df: pd.DataFrame = test_df
@@ -91,7 +92,7 @@ class QPPNet:
             neural_unit = NeuralUnit(neural_unit_id, input_length)
             optimizer = torch.optim.SGD(
                 neural_unit.parameters(),
-                lr=PaperConstants.LEARNING_RATE,
+                lr=learning_rate,
                 momentum=PaperConstants.MOMENTUM,
             )
             # TODO(WAN): rabbit721's reimplementation used torch.optim.lr_scheduler.StepLR(step_size=1000, gamma=0.95).
@@ -283,10 +284,19 @@ class QPPNet:
                         leave=False,
                         desc="Forward pass through batch.",
                     )
-                    class_losses: dict[NeuralUnitId, list] = {}
+
+                    # equivalence_classes many losses, where each one has weighted gradient.
+                    equivalence_class_losses = []
+                    num_per_equivalence_class = []
+
                     for _, gdf in equivalence_classes:
-                        # Cache the output of neural units as the output of children will be used as input to parent nodes.
+                        num_per_equivalence_class.append(len(gdf))
+
+                        # Cache the output of neural units;
+                        # the output of children will be used as input to parent nodes.
                         output_cache = {}
+                        # Maintain current loss.
+                        current_loss = None
                         # Sort by observation index descending to generate children first.
                         gdf = gdf.sort_values("Observation Index", ascending=False)
                         # Forward pass on every model.
@@ -295,7 +305,7 @@ class QPPNet:
                             gdf["Observation Index"],
                             gdf["Children Observation Indexes"],
                             gdf["Features"],
-                            gdf["Actual Total Time (us)"],
+                            gdf["Actual Total Time (scaled)"],
                         ):
                             neural_unit_id = NeuralUnitId(node_type, len(children_idxs))
 
@@ -305,15 +315,17 @@ class QPPNet:
                                 assert (
                                     child_idx in output_cache
                                 ), f"While computing {obs_idx}, {child_idx} not cached?"
-                                input_vector = torch.cat((input_vector, output_cache[child_idx]))
+                                input_vector = torch.cat((input_vector, output_cache[child_idx].detach()))
 
                             # Run the model.
                             model = self._neural_units[neural_unit_id]
                             output = model.forward(input_vector)
-                            output_cache[obs_idx] = output.clone()
 
                             if any(output.detach().isnan()):
+                                print("Fuck.")
                                 breakpoint()
+
+                            output_cache[obs_idx] = output.clone()
 
                             # From the paper,
                             # >  The first element of the output vector represents the neural unit's estimation
@@ -321,40 +333,53 @@ class QPPNet:
                             # > The remaining d elements represent the data vector, denoted as p_a[d].
                             estimated_latency = output[0]
                             loss = (estimated_latency - actual_time) ** 2
-
-                            if neural_unit_id not in class_losses:
-                                class_losses[neural_unit_id] = []
-                            class_losses[neural_unit_id].append(loss)
+                            if current_loss is None:
+                                current_loss = loss
+                            else:
+                                current_loss += loss
                             pbar.update()
+                        equivalence_class_losses.append(current_loss)
                     pbar.close()
 
                     # Update the gradients.
                     pbar = tqdm(
-                        total=len(class_losses),
+                        total=len(equivalence_class_losses),
                         leave=False,
                         desc="Backward pass through batch.",
                     )
-                    num_losses_total = sum(len(losses) for losses in class_losses.values())
-                    for neural_unit_id, losses in class_losses.items():
-                        # Compute the loss according to Eq. (7) in Section 5, aka RMSE.
-                        # However, for differentiability reasons we just use MSE here.
-                        num_losses_node_type = len(losses)
-                        batch_loss = torch.mean(torch.stack(losses))
-                        scaling_factor = num_losses_node_type / num_losses_total
-                        print("loss ", batch_loss, scaling_factor, batch_loss * scaling_factor)
-                        batch_loss.backward(torch.ones_like(batch_loss) * scaling_factor)
-                        # TODO(WAN): It appears that gradient clipping may be necessary. TBD.
-                        # torch.nn.utils.clip_grad_value_(
-                        #   self._neural_units[neural_unit_id].model.parameters(),
-                        #   clip_value=1000000
-                        # )
-                        # Update the gradients.
+                    equivalence_class_losses = torch.stack(equivalence_class_losses)
+                    num_per_equivalence_class = np.array(num_per_equivalence_class)
+                    weighted_gradient = torch.tensor(num_per_equivalence_class / num_per_equivalence_class.sum())
+                    total_loss = equivalence_class_losses / len(batch)
+                    total_loss.backward(weighted_gradient)
+                    for neural_unit_id in self._neural_units:
                         self._optimizers[neural_unit_id].step()
-                        # for p in self._neural_units[neural_unit_id].model.parameters():
-                        #     print(neural_unit_id, p.grad)
                         if self._schedulers[neural_unit_id] is not None:
                             self._schedulers[neural_unit_id].step()
-                        pbar.update()
+                        pbar.update(1)
+
+                    #
+                    # num_losses_total = sum(len(losses) for losses in class_losses.values())
+                    # for neural_unit_id, losses in class_losses.items():
+                    #     # Compute the loss according to Eq. (7) in Section 5, aka RMSE.
+                    #     # However, for differentiability reasons we just use MSE here.
+                    #     num_losses_node_type = len(losses)
+                    #     batch_loss = torch.mean(torch.stack(losses))
+                    #     scaling_factor = num_losses_node_type / num_losses_total
+                    #     print("loss ", batch_loss, scaling_factor, batch_loss * scaling_factor)
+                    #     batch_loss.backward(torch.ones_like(batch_loss) * scaling_factor)
+                    #     # TODO(WAN): It appears that gradient clipping may be necessary. TBD.
+                    #     # torch.nn.utils.clip_grad_value_(
+                    #     #   self._neural_units[neural_unit_id].model.parameters(),
+                    #     #   clip_value=1000000
+                    #     # )
+                    #     # Update the gradients.
+                    #     self._optimizers[neural_unit_id].step()
+                    #     # for p in self._neural_units[neural_unit_id].model.parameters():
+                    #     #     print(neural_unit_id, p.grad)
+                    #     if self._schedulers[neural_unit_id] is not None:
+                    #         self._schedulers[neural_unit_id].step()
+                    #     pbar.update()
                     pbar.close()
 
                     should_save = (epoch_save_interval is not None) and (
@@ -364,7 +389,10 @@ class QPPNet:
                     validation_loss = None
                     if validation_df is not None:
                         eval_vdf = self.evaluate(df=validation_df, leave_tqdm=False)
-                        validation_loss = QPPNet.calculate_root_mean_square_error(eval_vdf)
+                        metrics = QPPNet.compute_metrics(eval_vdf)
+                        validation_loss = metrics[0]
+                        # validation_loss = QPPNet.calculate_root_mean_square_error(eval_vdf)
+                        print(metrics)
                         threshold = self._min_validation_loss + self._patience_improvement
                         # Update patience, set early stop if necessary.
                         if validation_loss < threshold:
@@ -443,7 +471,7 @@ class QPPNet:
                     gdf["Children Observation Indexes"],
                     gdf["Query Num"],
                     gdf["Features"],
-                    gdf["Actual Total Time (us)"],
+                    gdf["Actual Total Time (scaled)"],
                 ):
                     neural_unit_id = NeuralUnitId(node_type, len(children_idxs))
 
@@ -477,8 +505,8 @@ class QPPNet:
         return pd.DataFrame(
             {
                 "Observation Index": observation_indexes,
-                "Estimated Latency (us)": estimated_latencies,
-                "Actual Latency (us)": actual_latencies,
+                "Estimated Latency (scaled)": estimated_latencies,
+                "Actual Latency (scaled)": actual_latencies,
             }
         )
 
@@ -511,7 +539,7 @@ class QPPNet:
     @staticmethod
     def calculate_root_mean_square_error(evaluate_df):
         return (
-            (evaluate_df["Actual Latency (us)"] - evaluate_df["Estimated Latency (us)"])
+            (evaluate_df["Actual Latency (scaled)"] - evaluate_df["Estimated Latency (scaled)"])
             ** 2
         ).mean() ** 0.5
 
@@ -523,11 +551,11 @@ class QPPNet:
             * (
                 (
                     (
-                        evaluate_df["Actual Latency (us)"]
-                        - evaluate_df["Estimated Latency (us)"]
+                        evaluate_df["Actual Latency (scaled)"]
+                        - evaluate_df["Estimated Latency (scaled)"]
                     ).abs()
                 )
-                / evaluate_df["Actual Latency (us)"]
+                / evaluate_df["Actual Latency (scaled)"]
             ).sum()
         )
 
@@ -539,8 +567,8 @@ class QPPNet:
             * (
                 (
                     (
-                        evaluate_df["Actual Latency (us)"]
-                        - evaluate_df["Estimated Latency (us)"]
+                        evaluate_df["Actual Latency (scaled)"]
+                        - evaluate_df["Estimated Latency (scaled)"]
                     ).abs()
                 )
             ).sum()
@@ -556,11 +584,11 @@ class QPPNet:
         if ignore_zeros:
             evaluate_df = evaluate_df.copy()
             evaluate_df = evaluate_df[
-                (evaluate_df["Estimated Latency (us)"] != 0)
-                & (evaluate_df["Actual Latency (us)"] != 0)
+                (evaluate_df["Estimated Latency (scaled)"] != 0)
+                & (evaluate_df["Actual Latency (scaled)"] != 0)
             ]
-        a = evaluate_df["Estimated Latency (us)"] / evaluate_df["Actual Latency (us)"]
-        b = evaluate_df["Actual Latency (us)"] / evaluate_df["Estimated Latency (us)"]
+        a = evaluate_df["Estimated Latency (scaled)"] / evaluate_df["Actual Latency (scaled)"]
+        b = evaluate_df["Actual Latency (scaled)"] / evaluate_df["Estimated Latency (scaled)"]
         return pd.concat([a, b], axis=1).max(axis=1).max()
 
     @staticmethod
