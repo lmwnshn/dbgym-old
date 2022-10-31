@@ -31,10 +31,16 @@ class ExperimentConfig:
 state_path = Path("./artifact/prod_dbms/state")
 experiment_configs = [
     ExperimentConfig(
-        name="default",
-        save_path=Path("./artifact/experiment/default/"),
-        train_csvlog_path=Path("./artifact/prod_dbms/workload_train.csv"),
-        test_csvlog_path=Path("./artifact/prod_dbms/workload_test.csv"),
+        name="tdtd",
+        save_path=Path("./artifact/experiment/tdtd/"),
+        train_csvlog_path=Path("./artifact/prod_dbms/train_default_workload.csv"),
+        test_csvlog_path=Path("./artifact/prod_dbms/test_workload.csv"),
+    ),
+    ExperimentConfig(
+        name="tgtd",
+        save_path=Path("./artifact/experiment/tgtd/"),
+        train_csvlog_path=Path("./artifact/prod_dbms/train_gaussian_workload.csv"),
+        test_csvlog_path=Path("./artifact/prod_dbms/test_workload.csv"),
     ),
 ]
 
@@ -79,7 +85,8 @@ for config in experiment_configs:
                 disable_env_checker=True,
                 gym_spec=gym_spec,
                 try_prepare=False,
-                print_errors=True
+                print_errors=True,
+                hack=False,
             )
             # TODO(WAN): Need to further abstract for (1) different model types and (2) actual action selection.
             #            But until I figure out what the APIs for those look like, this will do.
@@ -98,8 +105,8 @@ for config in experiment_configs:
             test_df, scalers = QPPNetFeatures.normalize_observations_df(test_df)
             with open(observations_path.parent / "scalers.pkl", "wb") as f:
                 pickle.dump(scalers, f)
-            _, validation_df = QPPNet.split(test_df, min_test_size=4096, random_state=15721)
-            # validation_df = test_df
+            # _, validation_df = QPPNet.split(test_df, min_test_size=4096, random_state=15721)
+            validation_df = test_df
             continue
 
         train_df = pd.read_parquet(observations_path)
@@ -116,7 +123,7 @@ for config in experiment_configs:
             train_df,
             test_df,
             save_folder=destination_folder,
-            batch_size=128,
+            batch_size=None,
             num_epochs=1000,
             patience=5,
             patience_min_epochs=None,

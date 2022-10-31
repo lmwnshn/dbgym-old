@@ -42,27 +42,58 @@ cat > ./artifact/dsb/workload_config.json << EOF
   "workload":
   [
     {
-      "id" : "train_default",
+      "id" : "gaussian_n0p5_1",
       "query_template_names" : [],
-      "instance_count" : 200,
-      "param_dist" : "default",
-      "rngseed" : 15721
-    },
-    {
-      "id" : "train_gaussian",
-      "query_template_names" : [],
-      "instance_count" : 200,
+      "instance_count" : 10,
       "param_dist" : "normal",
-      "param_sigma" : 2,
-      "param_center" : 0,
+      "param_sigma" : 1,
+      "param_center" : -0.5,
       "rngseed" : 15721
     },
     {
-      "id" : "test_default",
+      "id" : "gaussian_n0p3_1",
       "query_template_names" : [],
-      "instance_count" : 20,
-      "param_dist" : "default",
-      "rngseed" : 15445
+      "instance_count" : 10,
+      "param_dist" : "normal",
+      "param_sigma" : 1,
+      "param_center" : -0.3,
+      "rngseed" : 15721
+    },
+    {
+      "id" : "gaussian_n0p1_1",
+      "query_template_names" : [],
+      "instance_count" : 10,
+      "param_dist" : "normal",
+      "param_sigma" : 1,
+      "param_center" : -0.1,
+      "rngseed" : 15721
+    },
+    {
+      "id" : "gaussian_p0p1_1",
+      "query_template_names" : [],
+      "instance_count" : 10,
+      "param_dist" : "normal",
+      "param_sigma" : 1,
+      "param_center" : 0.1,
+      "rngseed" : 15721
+    },
+    {
+      "id" : "gaussian_p0p3_1",
+      "query_template_names" : [],
+      "instance_count" : 10,
+      "param_dist" : "normal",
+      "param_sigma" : 1,
+      "param_center" : 0.3,
+      "rngseed" : 15721
+    },
+    {
+      "id" : "gaussian_p0p5_1",
+      "query_template_names" : [],
+      "instance_count" : 10,
+      "param_dist" : "normal",
+      "param_sigma" : 1,
+      "param_center" : 0.5,
+      "rngseed" : 15721
     }
   ]
 }
@@ -71,7 +102,7 @@ EOF
 if [ ! -d "${ROOT_WD}/artifact/dsb/data" ]; then
   mkdir -p "${ROOT_WD}/artifact/dsb/data"
   cd ./build/dsb/code/tools
-  ./dsdgen -scale 1 -terminate n -force -rngseed 15721 -dir "${ROOT_WD}/artifact/dsb/data"
+  ./dsdgen -scale 10 -terminate n -force -rngseed 15721 -dir "${ROOT_WD}/artifact/dsb/data"
   cd "${ROOT_WD}"
 fi
 # Workload generation.
@@ -81,16 +112,10 @@ if [ ! -d "${ROOT_WD}/artifact/dsb/workload" ]; then
   cd "${ROOT_WD}"
 
   # These queries are really slow.
-  rm -rf ./artifact/dsb/workload/train_default/query{001,014,032,072,072_spj,081,092}
-  rm -rf ./artifact/dsb/workload/train_gaussian/query{001,014,032,072,072_spj,081,092}
-  rm -rf ./artifact/dsb/workload/test_default/query{001,014,032,072,072_spj,081,092}
+  # rm -rf ./artifact/dsb/workload/train_default/query{001,014,032,072,072_spj,081,092}
+  # rm -rf ./artifact/dsb/workload/train_gaussian/query{001,014,032,072,072_spj,081,092}
+  # rm -rf ./artifact/dsb/workload/test_default/query{001,014,032,072,072_spj,081,092}
 fi
-
-#query 32: timeout
-#query 81: 58s
-#query 72: 12s
-#query 92: 7s (edited
-
 
 # Database setup.
 PGPASSWORD=${DB_PASS} dropdb --host=localhost --username=${DB_USER} --if-exists ${DB_NAME}
@@ -177,6 +202,5 @@ _run_workloads() {
 }
 
 #set +x
-_run_workloads "train_default" "./artifact/prod_dbms/train_default_workload.csv" > train_default.txt 2>&1
-_run_workloads "train_gaussian" "./artifact/prod_dbms/train_gaussian_workload.csv" > train_gaussian.txt 2>&1
-_run_workloads "test_default" "./artifact/prod_dbms/test_workload.csv" > test_default.txt 2>&1
+_run_workloads "gaussian_n0p5_1,gaussian_n0p3_1,gaussian_n0p1_1" "./artifact/prod_dbms/train_gaussian_shift.csv" > train_gaussian_shift.txt 2>&1
+_run_workloads "gaussian_p0p1_1,gaussian_p0p3_1,gaussian_p0p5_1" "./artifact/prod_dbms/test_gaussian_shift.csv" > test_gaussian_shift.txt 2>&1

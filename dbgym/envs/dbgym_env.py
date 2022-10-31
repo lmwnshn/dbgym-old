@@ -15,10 +15,10 @@ from dbgym.spaces.observations.qppnet.features import QPPNetFeatures
 
 
 class DbGymEnv(gym.Env):
-    def __init__(self, gym_spec: GymSpec, seed=15721, try_prepare=False, print_errors=False):
+    def __init__(self, gym_spec: GymSpec, seed=15721, try_prepare=False, print_errors=False, hack=False):
         self._rng = np.random.default_rng(seed=seed)
         self._gym_spec = gym_spec
-        self._trainer = PostgresTrainer(gym_spec=self._gym_spec, seed=seed, hack=True)
+        self._trainer = PostgresTrainer(gym_spec=self._gym_spec, seed=seed, hack=hack)
 
         self._trainer.create_target_dbms()
         # Track whether the DB is dirty, i.e., needs to be recreated to get back to original state.

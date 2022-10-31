@@ -146,9 +146,10 @@ def _parse(sql):
             # Integer, float, or string constant.
             new_sql.append("$" + str(len(params) + 1))
             # HACK: See if you can steal a unary minus from the current template being built up.
-            # Skip -1 because that's going to be a $1 $2 etc. parameter.
+            # Skip index -1 because that's going to be a $1 $2 etc. parameter.
             if new_sql[-2] == "-":
-                del new_sql[-2]
+                # Can't replace, in case of "a=b-1" predicates.
+                new_sql[-2] = "+"
                 token_str = f"-{token_str}"
             # # Quote for consistency.
             # if token_str[0] != "'" and token_str[-1] != "'":

@@ -222,7 +222,7 @@ class QPPNet:
         """
         # TODO(WAN): set_detect_anomaly is too useful since QPPNet likes blowing up.
         try:
-            with torch.autograd.set_detect_anomaly(True):
+            with torch.autograd.set_detect_anomaly(False):
                 # Set up the train df.
                 df = self._train_df
                 # Set up the validation df if necessary.
