@@ -26,7 +26,12 @@ class DbGymEnv(gym.Env):
 
         assert len(self._gym_spec.snapshot) == 1, "We only support one schema right now."
         self.action_space = IndexSpace(gym_spec=gym_spec, seed=seed)
-        self.observation_space = QPPNetFeatures(gym_spec=gym_spec, seed=seed)
+        if gym_spec.model == 'qppnet':
+            self.observation_space = QPPNetFeatures(gym_spec=gym_spec, seed=seed)
+        elif gym_spec.model == 'gpredictor':
+            pass
+        elif gym_spec.model == 'automl':
+            pass
 
         self._runner = WorkloadRunner()
         self._try_prepare = try_prepare
