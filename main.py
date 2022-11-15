@@ -31,16 +31,10 @@ class ExperimentConfig:
 state_path = Path("./artifact/prod_dbms/state")
 experiment_configs = [
     ExperimentConfig(
-        name="tdtd",
-        save_path=Path("./artifact/experiment/tdtd/"),
-        train_csvlog_path=Path("./artifact/prod_dbms/train_default_workload.csv"),
-        test_csvlog_path=Path("./artifact/prod_dbms/test_workload.csv"),
-    ),
-    ExperimentConfig(
-        name="tgtd",
-        save_path=Path("./artifact/experiment/tgtd/"),
-        train_csvlog_path=Path("./artifact/prod_dbms/train_gaussian_workload.csv"),
-        test_csvlog_path=Path("./artifact/prod_dbms/test_workload.csv"),
+        name="shift",
+        save_path=Path("./artifact/experiment/shift/"),
+        train_csvlog_path=Path("./artifact/prod_dbms/train_gaussian_shift.csv"),
+        test_csvlog_path=Path("./artifact/prod_dbms/test_gaussian_shift.csv"),
     ),
 ]
 
@@ -54,15 +48,15 @@ for config in experiment_configs:
         test_csvlog_path=config.test_csvlog_path,
     )
     workload_manager.add_transform(PerfectPrediction())
-    # workload_manager.add_transform(OnlyUniqueQueries())
+    workload_manager.add_transform(OnlyUniqueQueries())
     # workload_manager.add_transform(SampleFracQueries(frac=0.01, random_state=15721))
     # workload_manager.add_transform(SampleFracQueries(frac=0.1, random_state=15721))
     # workload_manager.add_transform(SampleFracQueries(frac=0.8, random_state=15721))
-    # workload_manager.add_transform(ParamSubstitution("const0", lambda series: f"'0'"))
-    # workload_manager.add_transform(ParamSubstitution("mean", lambda series: f"'{series.mean()}'"))
-    # workload_manager.add_transform(ParamSubstitution("median", lambda series: f"'{series.median()}'"))
-    # workload_manager.add_transform(ParamSubstitution("max", lambda series: f"'{series.max()}'"))
-    # workload_manager.add_transform(ParamSubstitution("min", lambda series: f"'{series.min()}'"))
+    workload_manager.add_transform(ParamSubstitution("const0", lambda series: f"'0'"))
+    workload_manager.add_transform(ParamSubstitution("mean", lambda series: f"'{series.mean()}'"))
+    workload_manager.add_transform(ParamSubstitution("median", lambda series: f"'{series.median()}'"))
+    workload_manager.add_transform(ParamSubstitution("max", lambda series: f"'{series.max()}'"))
+    workload_manager.add_transform(ParamSubstitution("min", lambda series: f"'{series.min()}'"))
 
     train_df, test_df, validation_df, scalers = None, None, None, None
     experiment_workloads = workload_manager.generate_experiment_workloads()
@@ -119,17 +113,17 @@ for config in experiment_configs:
         destination_folder = config.save_path / experiment_workload.name / "qppnet"
         destination_folder.mkdir(parents=True, exist_ok=True)
         assert train_df is not None and validation_df is not None and test_df is not None
-        model = QPPNet(
-            train_df,
-            test_df,
-            save_folder=destination_folder,
-            batch_size=None,
-            num_epochs=1000,
-            patience=5,
-            patience_min_epochs=None,
-            learning_rate=0.1,
-        )
-        model.train(epoch_save_interval=100, validation_df=validation_df)
+        # model = QPPNet(
+        #     train_df,
+        #     test_df,
+        #     save_folder=destination_folder,
+        #     batch_size=None,
+        #     num_epochs=1000,
+        #     patience=5,
+        #     patience_min_epochs=None,
+        #     learning_rate=0.1,
+        # )
+        # model.train(epoch_save_interval=100, validation_df=validation_df)
 
         # # Pick actions based on the model.
         # for _ in range(1000):

@@ -1,0 +1,883 @@
+Warning: path already exists! This predictor may overwrite an existing predictor! path="./autogluon/tgtd-OnlyTrain_tdtd-OnlyTest/"
+Beginning AutoGluon training ... Time limit = 300s
+AutoGluon will save models to "./autogluon/tgtd-OnlyTrain_tdtd-OnlyTest/"
+AutoGluon Version:  0.5.2
+Python Version:     3.9.15
+Operating System:   Linux
+Train Data Rows:    120849
+Train Data Columns: 899
+Label Column: Actual Total Time (us)
+Preprocessing data ...
+AutoGluon infers your prediction problem is: 'regression' (because dtype of label-column == float and many unique label-values observed).
+	Label info (max, min, mean, stddev): (777913.0249023438, 0.0, 39115.78827, 67685.72567)
+	If 'regression' is not the correct problem_type, please manually specify the problem_type parameter during predictor init (You may specify problem_type as one of: ['binary', 'multiclass', 'regression'])
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    50887.15 MB
+	Train Data (Original)  Memory Usage: 874.82 MB (1.7% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 692 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  : 886 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])    :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('object', []) :   1 | ['Node Type']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :   1 | ['Node Type']
+		('float', [])     : 194 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])       :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('int', ['bool']) : 692 | ['Features_15', 'Features_19', 'Features_20', 'Features_27', 'Features_28', ...]
+	56.0s = Fit runtime
+	899 features in original data used to generate 899 features in processed data.
+	Train Data (Processed) Memory Usage: 281.46 MB (0.6% of available memory)
+Data preprocessing and feature engineering runtime = 56.74s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'root_mean_squared_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.02068697299936284, Train Rows: 118349, Val Rows: 2500
+Fitting 11 L1 models ...
+Fitting model: KNeighborsUnif ... Training model for up to 243.26s of the 243.25s of remaining time.
+	-31048.8069	 = Validation score   (-root_mean_squared_error)
+	0.52s	 = Training   runtime
+	7.22s	 = Validation runtime
+Fitting model: KNeighborsDist ... Training model for up to 235.4s of the 235.39s of remaining time.
+	-21460.4815	 = Validation score   (-root_mean_squared_error)
+	0.53s	 = Training   runtime
+	7.42s	 = Validation runtime
+Fitting model: LightGBMXT ... Training model for up to 227.34s of the 227.33s of remaining time.
+	-18781.4163	 = Validation score   (-root_mean_squared_error)
+	98.13s	 = Training   runtime
+	0.4s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 128.4s of the 128.4s of remaining time.
+	-13717.6423	 = Validation score   (-root_mean_squared_error)
+	86.27s	 = Training   runtime
+	0.35s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 41.38s of the 41.37s of remaining time.
+	-11430.6862	 = Validation score   (-root_mean_squared_error)
+	641.86s	 = Training   runtime
+	0.05s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 243.26s of the -600.97s of remaining time.
+	-11197.2245	 = Validation score   (-root_mean_squared_error)
+	0.14s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 901.61s ... Best model: "WeightedEnsemble_L2"
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("./autogluon/tgtd-OnlyTrain_tdtd-OnlyTest/")
+Beginning AutoGluon training ... Time limit = 300s
+AutoGluon will save models to "./autogluon/tgtd-OnlyTrain_tgtd-OnlyTest/"
+AutoGluon Version:  0.5.2
+Python Version:     3.9.15
+Operating System:   Linux
+Train Data Rows:    120849
+Train Data Columns: 899
+Label Column: Actual Total Time (us)
+Preprocessing data ...
+AutoGluon infers your prediction problem is: 'regression' (because dtype of label-column == float and many unique label-values observed).
+	Label info (max, min, mean, stddev): (777913.0249023438, 0.0, 39115.78827, 67685.72567)
+	If 'regression' is not the correct problem_type, please manually specify the problem_type parameter during predictor init (You may specify problem_type as one of: ['binary', 'multiclass', 'regression'])
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    49372.1 MB
+	Train Data (Original)  Memory Usage: 874.82 MB (1.8% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 692 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  : 886 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])    :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('object', []) :   1 | ['Node Type']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :   1 | ['Node Type']
+		('float', [])     : 194 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])       :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('int', ['bool']) : 692 | ['Features_15', 'Features_19', 'Features_20', 'Features_27', 'Features_28', ...]
+	57.2s = Fit runtime
+	899 features in original data used to generate 899 features in processed data.
+	Train Data (Processed) Memory Usage: 281.46 MB (0.6% of available memory)
+Data preprocessing and feature engineering runtime = 57.94s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'root_mean_squared_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.02068697299936284, Train Rows: 118349, Val Rows: 2500
+Fitting 11 L1 models ...
+Fitting model: KNeighborsUnif ... Training model for up to 242.06s of the 242.05s of remaining time.
+	-31048.8069	 = Validation score   (-root_mean_squared_error)
+	0.54s	 = Training   runtime
+	7.25s	 = Validation runtime
+Fitting model: KNeighborsDist ... Training model for up to 234.19s of the 234.19s of remaining time.
+	-21460.4815	 = Validation score   (-root_mean_squared_error)
+	0.54s	 = Training   runtime
+	6.71s	 = Validation runtime
+Fitting model: LightGBMXT ... Training model for up to 226.86s of the 226.86s of remaining time.
+	-18781.4163	 = Validation score   (-root_mean_squared_error)
+	101.95s	 = Training   runtime
+	0.38s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 124.14s of the 124.13s of remaining time.
+	-13717.6423	 = Validation score   (-root_mean_squared_error)
+	88.26s	 = Training   runtime
+	0.35s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 35.14s of the 35.13s of remaining time.
+	-11430.6862	 = Validation score   (-root_mean_squared_error)
+	641.83s	 = Training   runtime
+	0.05s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 242.06s of the -607.26s of remaining time.
+	-11197.2245	 = Validation score   (-root_mean_squared_error)
+	0.13s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 907.79s ... Best model: "WeightedEnsemble_L2"
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("./autogluon/tgtd-OnlyTrain_tgtd-OnlyTest/")
+Beginning AutoGluon training ... Time limit = 300s
+AutoGluon will save models to "./autogluon/tgtd-PerfectPrediction_tdtd-OnlyTest/"
+AutoGluon Version:  0.5.2
+Python Version:     3.9.15
+Operating System:   Linux
+Train Data Rows:    133160
+Train Data Columns: 899
+Label Column: Actual Total Time (us)
+Preprocessing data ...
+AutoGluon infers your prediction problem is: 'regression' (because dtype of label-column == float and many unique label-values observed).
+	Label info (max, min, mean, stddev): (794252.9907226562, 0.0, 39232.19304, 68652.41325)
+	If 'regression' is not the correct problem_type, please manually specify the problem_type parameter during predictor init (You may specify problem_type as one of: ['binary', 'multiclass', 'regression'])
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    49025.05 MB
+	Train Data (Original)  Memory Usage: 963.93 MB (2.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 690 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  : 886 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])    :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('object', []) :   1 | ['Node Type']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :   1 | ['Node Type']
+		('float', [])     : 196 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])       :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('int', ['bool']) : 690 | ['Features_22', 'Features_23', 'Features_25', 'Features_28', 'Features_33', ...]
+	62.7s = Fit runtime
+	899 features in original data used to generate 899 features in processed data.
+	Train Data (Processed) Memory Usage: 311.99 MB (0.6% of available memory)
+Data preprocessing and feature engineering runtime = 63.46s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'root_mean_squared_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.018774406728747372, Train Rows: 130660, Val Rows: 2500
+Fitting 11 L1 models ...
+Fitting model: KNeighborsUnif ... Training model for up to 236.54s of the 236.53s of remaining time.
+	-31554.3217	 = Validation score   (-root_mean_squared_error)
+	0.69s	 = Training   runtime
+	7.66s	 = Validation runtime
+Fitting model: KNeighborsDist ... Training model for up to 228.1s of the 228.09s of remaining time.
+	-22284.9628	 = Validation score   (-root_mean_squared_error)
+	0.71s	 = Training   runtime
+	7.8s	 = Validation runtime
+Fitting model: LightGBMXT ... Training model for up to 219.49s of the 219.49s of remaining time.
+	-19473.8243	 = Validation score   (-root_mean_squared_error)
+	107.48s	 = Training   runtime
+	0.37s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 111.25s of the 111.25s of remaining time.
+	-14362.4092	 = Validation score   (-root_mean_squared_error)
+	91.46s	 = Training   runtime
+	0.35s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 19.03s of the 19.03s of remaining time.
+	-15767.5141	 = Validation score   (-root_mean_squared_error)
+	721.61s	 = Training   runtime
+	0.05s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 236.54s of the -703.01s of remaining time.
+	-13819.0376	 = Validation score   (-root_mean_squared_error)
+	0.12s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 1003.54s ... Best model: "WeightedEnsemble_L2"
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("./autogluon/tgtd-PerfectPrediction_tdtd-OnlyTest/")
+Beginning AutoGluon training ... Time limit = 300s
+AutoGluon will save models to "./autogluon/tgtd-PerfectPrediction_tgtd-OnlyTest/"
+AutoGluon Version:  0.5.2
+Python Version:     3.9.15
+Operating System:   Linux
+Train Data Rows:    133160
+Train Data Columns: 899
+Label Column: Actual Total Time (us)
+Preprocessing data ...
+AutoGluon infers your prediction problem is: 'regression' (because dtype of label-column == float and many unique label-values observed).
+	Label info (max, min, mean, stddev): (794252.9907226562, 0.0, 39232.19304, 68652.41325)
+	If 'regression' is not the correct problem_type, please manually specify the problem_type parameter during predictor init (You may specify problem_type as one of: ['binary', 'multiclass', 'regression'])
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    48687.45 MB
+	Train Data (Original)  Memory Usage: 963.93 MB (2.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 690 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  : 886 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])    :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('object', []) :   1 | ['Node Type']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :   1 | ['Node Type']
+		('float', [])     : 196 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])       :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('int', ['bool']) : 690 | ['Features_22', 'Features_23', 'Features_25', 'Features_28', 'Features_33', ...]
+	61.7s = Fit runtime
+	899 features in original data used to generate 899 features in processed data.
+	Train Data (Processed) Memory Usage: 311.99 MB (0.6% of available memory)
+Data preprocessing and feature engineering runtime = 62.5s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'root_mean_squared_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.018774406728747372, Train Rows: 130660, Val Rows: 2500
+Fitting 11 L1 models ...
+Fitting model: KNeighborsUnif ... Training model for up to 237.5s of the 237.5s of remaining time.
+	-31554.3217	 = Validation score   (-root_mean_squared_error)
+	0.69s	 = Training   runtime
+	7.45s	 = Validation runtime
+Fitting model: KNeighborsDist ... Training model for up to 229.28s of the 229.27s of remaining time.
+	-22284.9628	 = Validation score   (-root_mean_squared_error)
+	0.69s	 = Training   runtime
+	7.51s	 = Validation runtime
+Fitting model: LightGBMXT ... Training model for up to 220.99s of the 220.99s of remaining time.
+	-19473.8243	 = Validation score   (-root_mean_squared_error)
+	107.23s	 = Training   runtime
+	0.37s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 112.99s of the 112.99s of remaining time.
+	-14362.4092	 = Validation score   (-root_mean_squared_error)
+	91.63s	 = Training   runtime
+	0.34s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 20.63s of the 20.63s of remaining time.
+	-15767.5141	 = Validation score   (-root_mean_squared_error)
+	724.99s	 = Training   runtime
+	0.05s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 237.5s of the -704.79s of remaining time.
+	-13819.0376	 = Validation score   (-root_mean_squared_error)
+	0.13s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 1005.33s ... Best model: "WeightedEnsemble_L2"
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("./autogluon/tgtd-PerfectPrediction_tgtd-OnlyTest/")
+Beginning AutoGluon training ... Time limit = 300s
+AutoGluon will save models to "./autogluon/tdtd-OnlyTrain_tdtd-OnlyTest/"
+AutoGluon Version:  0.5.2
+Python Version:     3.9.15
+Operating System:   Linux
+Train Data Rows:    120834
+Train Data Columns: 899
+Label Column: Actual Total Time (us)
+Preprocessing data ...
+AutoGluon infers your prediction problem is: 'regression' (because dtype of label-column == float and many unique label-values observed).
+	Label info (max, min, mean, stddev): (1054586.0595703125, 0.0, 39178.23262, 68439.74899)
+	If 'regression' is not the correct problem_type, please manually specify the problem_type parameter during predictor init (You may specify problem_type as one of: ['binary', 'multiclass', 'regression'])
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    49011.51 MB
+	Train Data (Original)  Memory Usage: 874.71 MB (1.8% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 691 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  : 886 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])    :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('object', []) :   1 | ['Node Type']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :   1 | ['Node Type']
+		('float', [])     : 195 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])       :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('int', ['bool']) : 691 | ['Features_13', 'Features_14', 'Features_21', 'Features_23', 'Features_28', ...]
+	56.2s = Fit runtime
+	899 features in original data used to generate 899 features in processed data.
+	Train Data (Processed) Memory Usage: 282.27 MB (0.6% of available memory)
+Data preprocessing and feature engineering runtime = 56.9s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'root_mean_squared_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.02068954102322194, Train Rows: 118334, Val Rows: 2500
+Fitting 11 L1 models ...
+Fitting model: KNeighborsUnif ... Training model for up to 243.1s of the 243.09s of remaining time.
+	-32633.0189	 = Validation score   (-root_mean_squared_error)
+	0.52s	 = Training   runtime
+	7.12s	 = Validation runtime
+Fitting model: KNeighborsDist ... Training model for up to 235.39s of the 235.38s of remaining time.
+	-22082.4715	 = Validation score   (-root_mean_squared_error)
+	0.52s	 = Training   runtime
+	7.22s	 = Validation runtime
+Fitting model: LightGBMXT ... Training model for up to 227.56s of the 227.55s of remaining time.
+	-20534.1769	 = Validation score   (-root_mean_squared_error)
+	100.17s	 = Training   runtime
+	0.37s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 126.63s of the 126.62s of remaining time.
+	-16522.174	 = Validation score   (-root_mean_squared_error)
+	85.22s	 = Training   runtime
+	0.32s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 40.72s of the 40.71s of remaining time.
+	-13202.5255	 = Validation score   (-root_mean_squared_error)
+	636.48s	 = Training   runtime
+	0.05s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 243.1s of the -596.26s of remaining time.
+	-12644.9922	 = Validation score   (-root_mean_squared_error)
+	0.12s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 896.74s ... Best model: "WeightedEnsemble_L2"
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("./autogluon/tdtd-OnlyTrain_tdtd-OnlyTest/")
+Beginning AutoGluon training ... Time limit = 300s
+AutoGluon will save models to "./autogluon/tdtd-PerfectPrediction_tdtd-OnlyTest/"
+AutoGluon Version:  0.5.2
+Python Version:     3.9.15
+Operating System:   Linux
+Train Data Rows:    132670
+Train Data Columns: 899
+Label Column: Actual Total Time (us)
+Preprocessing data ...
+AutoGluon infers your prediction problem is: 'regression' (because dtype of label-column == float and many unique label-values observed).
+	Label info (max, min, mean, stddev): (1011890.0146484375, 0.0, 38978.81685, 67413.20375)
+	If 'regression' is not the correct problem_type, please manually specify the problem_type parameter during predictor init (You may specify problem_type as one of: ['binary', 'multiclass', 'regression'])
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    48644.37 MB
+	Train Data (Original)  Memory Usage: 960.39 MB (2.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 694 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  : 886 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])    :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('object', []) :   1 | ['Node Type']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :   1 | ['Node Type']
+		('float', [])     : 192 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])       :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('int', ['bool']) : 694 | ['Features_13', 'Features_24', 'Features_27', 'Features_28', 'Features_33', ...]
+	67.4s = Fit runtime
+	899 features in original data used to generate 899 features in processed data.
+	Train Data (Processed) Memory Usage: 307.13 MB (0.6% of available memory)
+Data preprocessing and feature engineering runtime = 68.26s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'root_mean_squared_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.018843747644531544, Train Rows: 130170, Val Rows: 2500
+Fitting 11 L1 models ...
+Fitting model: KNeighborsUnif ... Training model for up to 231.74s of the 231.74s of remaining time.
+	-30912.7396	 = Validation score   (-root_mean_squared_error)
+	0.72s	 = Training   runtime
+	8.27s	 = Validation runtime
+Fitting model: KNeighborsDist ... Training model for up to 222.67s of the 222.67s of remaining time.
+	-21416.8724	 = Validation score   (-root_mean_squared_error)
+	0.69s	 = Training   runtime
+	7.61s	 = Validation runtime
+Fitting model: LightGBMXT ... Training model for up to 214.29s of the 214.28s of remaining time.
+	-18109.5413	 = Validation score   (-root_mean_squared_error)
+	107.78s	 = Training   runtime
+	0.4s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 105.68s of the 105.67s of remaining time.
+	-14102.5766	 = Validation score   (-root_mean_squared_error)
+	93.61s	 = Training   runtime
+	0.34s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 11.33s of the 11.32s of remaining time.
+	-14252.0211	 = Validation score   (-root_mean_squared_error)
+	715.51s	 = Training   runtime
+	0.05s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 231.74s of the -704.64s of remaining time.
+	-13037.406	 = Validation score   (-root_mean_squared_error)
+	0.12s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 1005.2s ... Best model: "WeightedEnsemble_L2"
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("./autogluon/tdtd-PerfectPrediction_tdtd-OnlyTest/")
+Warning: path already exists! This predictor may overwrite an existing predictor! path="./autogluon/tdtd-OnlyTrain_tdtd-OnlyTest/"
+Beginning AutoGluon training ... Time limit = 300s
+AutoGluon will save models to "./autogluon/tdtd-OnlyTrain_tdtd-OnlyTest/"
+AutoGluon Version:  0.5.2
+Python Version:     3.9.15
+Operating System:   Linux
+Train Data Rows:    120834
+Train Data Columns: 899
+Label Column: Actual Total Time (us)
+Preprocessing data ...
+AutoGluon infers your prediction problem is: 'regression' (because dtype of label-column == float and many unique label-values observed).
+	Label info (max, min, mean, stddev): (1054586.0595703125, 0.0, 39178.23262, 68439.74899)
+	If 'regression' is not the correct problem_type, please manually specify the problem_type parameter during predictor init (You may specify problem_type as one of: ['binary', 'multiclass', 'regression'])
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    48925.79 MB
+	Train Data (Original)  Memory Usage: 874.71 MB (1.8% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 691 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  : 886 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])    :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('object', []) :   1 | ['Node Type']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :   1 | ['Node Type']
+		('float', [])     : 195 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])       :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('int', ['bool']) : 691 | ['Features_13', 'Features_14', 'Features_21', 'Features_23', 'Features_28', ...]
+	56.6s = Fit runtime
+	899 features in original data used to generate 899 features in processed data.
+	Train Data (Processed) Memory Usage: 282.27 MB (0.6% of available memory)
+Data preprocessing and feature engineering runtime = 57.29s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'root_mean_squared_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.02068954102322194, Train Rows: 118334, Val Rows: 2500
+Fitting 11 L1 models ...
+Fitting model: KNeighborsUnif ... Training model for up to 242.71s of the 242.71s of remaining time.
+	-32633.0189	 = Validation score   (-root_mean_squared_error)
+	0.54s	 = Training   runtime
+	7.55s	 = Validation runtime
+Fitting model: KNeighborsDist ... Training model for up to 234.49s of the 234.49s of remaining time.
+	-22082.4715	 = Validation score   (-root_mean_squared_error)
+	0.57s	 = Training   runtime
+	6.9s	 = Validation runtime
+Fitting model: LightGBMXT ... Training model for up to 226.9s of the 226.89s of remaining time.
+	-20534.1769	 = Validation score   (-root_mean_squared_error)
+	99.7s	 = Training   runtime
+	0.39s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 126.39s of the 126.38s of remaining time.
+	-16522.174	 = Validation score   (-root_mean_squared_error)
+	85.41s	 = Training   runtime
+	0.3s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 40.3s of the 40.3s of remaining time.
+	-13202.5255	 = Validation score   (-root_mean_squared_error)
+	637.09s	 = Training   runtime
+	0.05s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 242.71s of the -597.5s of remaining time.
+	-12644.9922	 = Validation score   (-root_mean_squared_error)
+	0.13s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 898.1s ... Best model: "WeightedEnsemble_L2"
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("./autogluon/tdtd-OnlyTrain_tdtd-OnlyTest/")
+Warning: path already exists! This predictor may overwrite an existing predictor! path="./autogluon/tdtd-PerfectPrediction_tdtd-OnlyTest/"
+Beginning AutoGluon training ... Time limit = 300s
+AutoGluon will save models to "./autogluon/tdtd-PerfectPrediction_tdtd-OnlyTest/"
+AutoGluon Version:  0.5.2
+Python Version:     3.9.15
+Operating System:   Linux
+Train Data Rows:    132670
+Train Data Columns: 899
+Label Column: Actual Total Time (us)
+Preprocessing data ...
+AutoGluon infers your prediction problem is: 'regression' (because dtype of label-column == float and many unique label-values observed).
+	Label info (max, min, mean, stddev): (1011890.0146484375, 0.0, 38978.81685, 67413.20375)
+	If 'regression' is not the correct problem_type, please manually specify the problem_type parameter during predictor init (You may specify problem_type as one of: ['binary', 'multiclass', 'regression'])
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    48449.39 MB
+	Train Data (Original)  Memory Usage: 960.39 MB (2.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 694 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  : 886 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])    :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('object', []) :   1 | ['Node Type']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :   1 | ['Node Type']
+		('float', [])     : 192 | ['Children Observation Indexes_0', 'Children Observation Indexes_1', 'Features_0', 'Features_1', 'Features_2', ...]
+		('int', [])       :  12 | ['Query Hash_0', 'Query Hash_1', 'Query Hash_2', 'Query Hash_3', 'Query Hash_4', ...]
+		('int', ['bool']) : 694 | ['Features_13', 'Features_24', 'Features_27', 'Features_28', 'Features_33', ...]
+	61.7s = Fit runtime
+	899 features in original data used to generate 899 features in processed data.
+	Train Data (Processed) Memory Usage: 307.13 MB (0.6% of available memory)
+Data preprocessing and feature engineering runtime = 62.53s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'root_mean_squared_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.018843747644531544, Train Rows: 130170, Val Rows: 2500
+Fitting 11 L1 models ...
+Fitting model: KNeighborsUnif ... Training model for up to 237.47s of the 237.47s of remaining time.
+	-30912.7396	 = Validation score   (-root_mean_squared_error)
+	0.78s	 = Training   runtime
+	7.48s	 = Validation runtime
+Fitting model: KNeighborsDist ... Training model for up to 229.07s of the 229.07s of remaining time.
+	-21416.8724	 = Validation score   (-root_mean_squared_error)
+	0.78s	 = Training   runtime
+	7.53s	 = Validation runtime
+Fitting model: LightGBMXT ... Training model for up to 220.63s of the 220.62s of remaining time.
+	-18109.5413	 = Validation score   (-root_mean_squared_error)
+	107.28s	 = Training   runtime
+	0.39s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 112.54s of the 112.53s of remaining time.
+[1000]	valid_set's rmse: 22762.4
+[2000]	valid_set's rmse: 21719.7
+[3000]	valid_set's rmse: 21007.3
+[4000]	valid_set's rmse: 20441.9
+[5000]	valid_set's rmse: 20020.2
+[6000]	valid_set's rmse: 19719.3
+[7000]	valid_set's rmse: 19418.1
+[8000]	valid_set's rmse: 19210
+[9000]	valid_set's rmse: 18950.7
+[10000]	valid_set's rmse: 18784.8
+[1000]	valid_set's rmse: 18410
+[2000]	valid_set's rmse: 16659.7
+[3000]	valid_set's rmse: 15770.7
+[4000]	valid_set's rmse: 15186.6
+[5000]	valid_set's rmse: 14703.6
+[6000]	valid_set's rmse: 14370.9
+[7000]	valid_set's rmse: 14146.9
+[8000]	valid_set's rmse: 13944.8
+[9000]	valid_set's rmse: 13798.8
+[10000]	valid_set's rmse: 13720.1
+count     12088.000000
+mean      12708.794666
+std       35151.169367
+min           0.024701
+25%         114.775150
+50%        1453.603910
+75%       10298.479256
+max      623754.687500
+Name: diff (us), dtype: float64
+count     1.208800e+04
+mean               inf
+std                inf
+min      -9.924061e-01
+25%       1.045936e+00
+50%       1.264738e+00
+75%       2.146165e+00
+max      1.797693e+308
+Name: q_err, dtype: float64
+[1000]	valid_set's rmse: 22762.4
+[2000]	valid_set's rmse: 21719.7
+[3000]	valid_set's rmse: 21007.3
+[4000]	valid_set's rmse: 20441.9
+[5000]	valid_set's rmse: 20020.2
+[6000]	valid_set's rmse: 19719.3
+[7000]	valid_set's rmse: 19418.1
+[8000]	valid_set's rmse: 19210
+[9000]	valid_set's rmse: 18950.7
+[10000]	valid_set's rmse: 18784.8
+[1000]	valid_set's rmse: 18410
+[2000]	valid_set's rmse: 16659.7
+[3000]	valid_set's rmse: 15770.7
+[4000]	valid_set's rmse: 15186.6
+[5000]	valid_set's rmse: 14703.6
+[6000]	valid_set's rmse: 14370.9
+[7000]	valid_set's rmse: 14146.9
+[8000]	valid_set's rmse: 13944.8
+[9000]	valid_set's rmse: 13798.8
+[10000]	valid_set's rmse: 13720.1
+count     12104.000000
+mean      12124.981850
+std       29579.310726
+min           0.009963
+25%         112.126229
+50%        1292.508926
+75%       11113.202675
+max      410196.438110
+Name: diff (us), dtype: float64
+count     1.210400e+04
+mean               inf
+std                inf
+min      -9.984890e-01
+25%       1.044907e+00
+50%       1.254855e+00
+75%       2.101435e+00
+max      1.797693e+308
+Name: q_err, dtype: float64
+[1000]	valid_set's rmse: 25367.9
+[2000]	valid_set's rmse: 23113.8
+[3000]	valid_set's rmse: 22004.7
+[4000]	valid_set's rmse: 21313.1
+[5000]	valid_set's rmse: 20867.8
+[6000]	valid_set's rmse: 20468.5
+[7000]	valid_set's rmse: 20153.9
+[8000]	valid_set's rmse: 19927.6
+[9000]	valid_set's rmse: 19656.2
+[10000]	valid_set's rmse: 19474.5
+[1000]	valid_set's rmse: 19594.7
+[2000]	valid_set's rmse: 17546.5
+[3000]	valid_set's rmse: 16389.6
+[4000]	valid_set's rmse: 15609.9
+[5000]	valid_set's rmse: 15370.2
+[6000]	valid_set's rmse: 15081.1
+[7000]	valid_set's rmse: 14796
+[8000]	valid_set's rmse: 14602.3
+[9000]	valid_set's rmse: 14457.1
+[10000]	valid_set's rmse: 14363.5
+count     12088.000000
+mean      11413.341682
+std       33091.182637
+min           0.037512
+25%         164.999336
+50%        1862.394089
+75%       11049.387169
+max      589126.796875
+Name: diff (us), dtype: float64
+count     1.208800e+04
+mean               inf
+std                inf
+min      -9.992533e-01
+25%       1.050675e+00
+50%       1.278272e+00
+75%       2.384874e+00
+max      1.797693e+308
+Name: q_err, dtype: float64
+[1000]	valid_set's rmse: 25367.9
+[2000]	valid_set's rmse: 23113.8
+[3000]	valid_set's rmse: 22004.7
+[4000]	valid_set's rmse: 21313.1
+[5000]	valid_set's rmse: 20867.8
+[6000]	valid_set's rmse: 20468.5
+[7000]	valid_set's rmse: 20153.9
+[8000]	valid_set's rmse: 19927.6
+[9000]	valid_set's rmse: 19656.2
+[10000]	valid_set's rmse: 19474.5
+[1000]	valid_set's rmse: 19594.7
+[2000]	valid_set's rmse: 17546.5
+[3000]	valid_set's rmse: 16389.6
+[4000]	valid_set's rmse: 15609.9
+[5000]	valid_set's rmse: 15370.2
+[6000]	valid_set's rmse: 15081.1
+[7000]	valid_set's rmse: 14796
+[8000]	valid_set's rmse: 14602.3
+[9000]	valid_set's rmse: 14457.1
+[10000]	valid_set's rmse: 14363.5
+count     12104.000000
+mean      10553.470436
+std       23176.386813
+min           0.032056
+25%         166.397019
+50%        1924.325493
+75%       10640.031685
+max      331119.420410
+Name: diff (us), dtype: float64
+count     1.210400e+04
+mean               inf
+std                inf
+min      -9.973080e-01
+25%       1.052712e+00
+50%       1.274195e+00
+75%       2.238091e+00
+max      1.797693e+308
+Name: q_err, dtype: float64
+[1000]	valid_set's rmse: 24197.5
+[2000]	valid_set's rmse: 23062.5
+[3000]	valid_set's rmse: 22309.6
+[4000]	valid_set's rmse: 21845.2
+[5000]	valid_set's rmse: 21566.8
+[6000]	valid_set's rmse: 21306.9
+[7000]	valid_set's rmse: 21031.6
+[8000]	valid_set's rmse: 20826.6
+[9000]	valid_set's rmse: 20685
+[10000]	valid_set's rmse: 20551.7
+[1000]	valid_set's rmse: 20241.5
+[2000]	valid_set's rmse: 18554.7
+[3000]	valid_set's rmse: 17682.2
+[4000]	valid_set's rmse: 17351.1
+[5000]	valid_set's rmse: 17027.3
+[6000]	valid_set's rmse: 16828.4
+[7000]	valid_set's rmse: 16676.9
+[8000]	valid_set's rmse: 16603.2
+[9000]	valid_set's rmse: 16531.3
+[10000]	valid_set's rmse: 16528.9
+count     12088.000000
+mean      13808.691660
+std       35321.236121
+min           0.038121
+25%          70.921062
+50%        1590.958333
+75%       12258.445702
+max      456914.178223
+Name: diff (us), dtype: float64
+count     1.208800e+04
+mean               inf
+std                inf
+min      -9.991092e-01
+25%       1.058219e+00
+50%       1.288610e+00
+75%       2.179574e+00
+max      1.797693e+308
+Name: q_err, dtype: float64
+[1000]	valid_set's rmse: 22714
+[2000]	valid_set's rmse: 21277.3
+[3000]	valid_set's rmse: 20332
+[4000]	valid_set's rmse: 19678.9
+[5000]	valid_set's rmse: 19199
+[6000]	valid_set's rmse: 18894.8
+[7000]	valid_set's rmse: 18650.5
+[8000]	valid_set's rmse: 18429.2
+[9000]	valid_set's rmse: 18227.2
+[10000]	valid_set's rmse: 18109.5
+[1000]	valid_set's rmse: 17678.1
+[2000]	valid_set's rmse: 15994.3
+[3000]	valid_set's rmse: 15254.9
+[4000]	valid_set's rmse: 14814.1
+[5000]	valid_set's rmse: 14577
+[6000]	valid_set's rmse: 14444.5
+[7000]	valid_set's rmse: 14333.3
+[8000]	valid_set's rmse: 14241.2
+[9000]	valid_set's rmse: 14178.4
+[10000]	valid_set's rmse: 14105.2
+count     12088.000000
+mean      12163.075213
+std       31962.290590
+min           0.052374
+25%         191.543320
+50%        1773.423782
+75%       10905.046185
+max      404045.769043
+Name: diff (us), dtype: float64
+count     1.208800e+04
+mean               inf
+std                inf
+min      -9.961598e-01
+25%       1.053847e+00
+50%       1.311066e+00
+75%       2.475430e+00
+max      1.797693e+308
+Name: q_err, dtype: float64
+[1000]	valid_set's rmse: 24197.5
+[2000]	valid_set's rmse: 23062.5
+[3000]	valid_set's rmse: 22309.6
+[4000]	valid_set's rmse: 21845.2
+[5000]	valid_set's rmse: 21566.8
+[6000]	valid_set's rmse: 21306.9
+[7000]	valid_set's rmse: 21031.6
+[8000]	valid_set's rmse: 20826.6
+[9000]	valid_set's rmse: 20685
+[10000]	valid_set's rmse: 20551.7
+[1000]	valid_set's rmse: 20241.5
+[2000]	valid_set's rmse: 18554.7
+[3000]	valid_set's rmse: 17682.2
+[4000]	valid_set's rmse: 17351.1
+[5000]	valid_set's rmse: 17027.3
+[6000]	valid_set's rmse: 16828.4
+[7000]	valid_set's rmse: 16676.9
+[8000]	valid_set's rmse: 16603.2
+[9000]	valid_set's rmse: 16531.3
+[10000]	valid_set's rmse: 16528.9
+count     12088.000000
+mean      13809.164102
+std       35322.904161
+min           0.038121
+25%          70.992299
+50%        1591.301853
+75%       12262.037109
+max      456865.990723
+Name: diff (us), dtype: float64
+count     1.208800e+04
+mean               inf
+std                inf
+min      -9.991092e-01
+25%       1.058219e+00
+50%       1.288610e+00
+75%       2.181062e+00
+max      1.797693e+308
+Name: q_err, dtype: float64
+[1000]	valid_set's rmse: 22714
+[2000]	valid_set's rmse: 21277.3
+[3000]	valid_set's rmse: 20332
+[4000]	valid_set's rmse: 19678.9
+[5000]	valid_set's rmse: 19199
+[6000]	valid_set's rmse: 18894.8
+[7000]	valid_set's rmse: 18650.5
+[8000]	valid_set's rmse: 18429.2
+[9000]	valid_set's rmse: 18227.2
+[10000]	valid_set's rmse: 18109.5
+[1000]	valid_set's rmse: 17678.1
+[2000]	valid_set's rmse: 15994.3
+[3000]	valid_set's rmse: 15254.9
+[4000]	valid_set's rmse: 14814.1
+[5000]	valid_set's rmse: 14577
+[6000]	valid_set's rmse: 14444.5
+[7000]	valid_set's rmse: 14333.3
+[8000]	valid_set's rmse: 14241.2	-14102.5766	 = Validation score   (-root_mean_squared_error)
+	94.78s	 = Training   runtime
+	0.34s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 16.99s of the 16.98s of remaining time.
+	-14252.0211	 = Validation score   (-root_mean_squared_error)
+	712.5s	 = Training   runtime
+	0.05s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 237.47s of the -696.28s of remaining time.
+	-13037.406	 = Validation score   (-root_mean_squared_error)
+	0.12s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 996.89s ... Best model: "WeightedEnsemble_L2"
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("./autogluon/tdtd-PerfectPrediction_tdtd-OnlyTest/")
+
+[9000]	valid_set's rmse: 14178.4
+[10000]	valid_set's rmse: 14105.2
+count     12088.000000
+mean      12163.075213
+std       31962.290590
+min           0.052374
+25%         191.543320
+50%        1773.423782
+75%       10905.046185
+max      404045.769043
+Name: diff (us), dtype: float64
+count     1.208800e+04
+mean               inf
+std                inf
+min      -9.961598e-01
+25%       1.053847e+00
+50%       1.311066e+00
+75%       2.475430e+00
+max      1.797693e+308
+Name: q_err, dtype: float64

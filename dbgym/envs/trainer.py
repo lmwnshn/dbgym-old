@@ -259,4 +259,7 @@ class PostgresTrainer(Trainer):
         if self._gym_spec.snapshot is None:
             engine = create_engine(self.get_target_dbms_connstr_sqlalchemy())
             inspector = inspect(engine)
+            for table_name in inspector.get_table_names():
+                if not table_name.startswith("pg_"):
+                    self._run_sql(f"VACUUM ANALYZE {table_name}")
             self._gym_spec.snapshot_db(engine, inspector)
