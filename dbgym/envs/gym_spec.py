@@ -19,9 +19,11 @@ class GymSpec:
         self,
         historical_workloads: list[Workload],
         historical_state: State,
+        model: str,
     ):
         self.historical_workloads: list[Workload] = historical_workloads
         self.historical_state: State = historical_state
+        self.model: str = model
 
         # These should be set on the first restore of the historical state.
         self.snapshot: Optional[Snapshot] = None

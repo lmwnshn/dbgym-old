@@ -1,0 +1,16 @@
+experiment_config:
+  - {name: tdtd,
+    save_path: ./artifact/experiment/tdtd/,
+    train_csvlog_path: ./artifact/prod_dbms/train_default_workload.csv,
+    test_csvlog_path: ./artifact/prod_dbms/test_workload.csv,
+    model: qppnet}
+  - {name: tdtd,
+    save_path: ./artifact/experiment/tdtd/,
+    train_csvlog_path: ./artifact/prod_dbms/train_gaussian_workload.csv,
+    test_csvlog_path: ./artifact/prod_dbms/test_workload.csv,
+    model: qppnet}
+  - {name: tdtd,
+    save_path: ./artifact/experiment/tdtd/,
+    train_csvlog_path: ./artifact/prod_dbms/train_default_workload.csv,
+    test_csvlog_path: ./artifact/prod_dbms/test_workload.csv,
+    model: gpredictor}
