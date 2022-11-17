@@ -5,10 +5,13 @@ from typing import Optional
 import gym
 import pandas as pd
 import pickle
+import sys
+import yaml
 
 from dbgym.envs.gym_spec import GymSpec
 from dbgym.envs.state import PostgresState
 from dbgym.spaces.observations.qppnet.features import QPPNetFeatures
+from dbgym.spaces.observations.gpredictor.features import GpredictorFeatures
 from dbgym.workload.manager import WorkloadManager
 from dbgym.workload.transform import (
     OnlyUniqueQueries,
@@ -22,27 +25,31 @@ from tqdm import tqdm
 
 @dataclass
 class ExperimentConfig:
+    '''
+    Add more fields here if introducing more configuration options.
+    '''
     name: str
     save_path: Path
     train_csvlog_path: Path
     test_csvlog_path: Optional[Path]
+    model: str
 
 
 state_path = Path("./artifact/prod_dbms/state")
+try:
+    config_path = Path(sys.argv[1])
+except:
+    config_path = Path("./experiment_config.yaml")
+config_list = yaml.load(open(config_path, 'r'))["experiment_config"]
+# Parse the configs.
 experiment_configs = [
-    ExperimentConfig(
-        name="tdtd",
-        save_path=Path("./artifact/experiment/tdtd/"),
-        train_csvlog_path=Path("./artifact/prod_dbms/train_default_workload.csv"),
-        test_csvlog_path=Path("./artifact/prod_dbms/test_workload.csv"),
-    ),
-    ExperimentConfig(
-        name="tgtd",
-        save_path=Path("./artifact/experiment/tgtd/"),
-        train_csvlog_path=Path("./artifact/prod_dbms/train_gaussian_workload.csv"),
-        test_csvlog_path=Path("./artifact/prod_dbms/test_workload.csv"),
-    ),
+    ExperimentConfig(**opts) for opts in config_list
 ]
+# Convert strings to Paths?
+for config in experiment_configs:
+    config.save_path = Path(config.save_path)
+    config.test_csvlog_path = Path(config.test_csvlog_path)
+    config.train_csvlog_path = Path(config.train_csvlog_path)
 
 pbar = tqdm(total=len(experiment_configs), desc="Iterating over experiment configs.")
 for config in experiment_configs:
@@ -90,7 +97,7 @@ for config in experiment_configs:
             )
             # TODO(WAN): Need to further abstract for (1) different model types and (2) actual action selection.
             #            But until I figure out what the APIs for those look like, this will do.
-            assert isinstance(env.observation_space, QPPNetFeatures)
+            assert isinstance(env.observation_space, (QPPNetFeatures, GpredictorFeatures))
             observations, info = env.reset(seed=15721)
             train_df = env.observation_space.convert_observations_to_df(observations)
             train_df.to_parquet(observations_path)

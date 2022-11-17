@@ -18,6 +18,7 @@ from sqlalchemy.pool import SingletonThreadPool
 from tqdm import tqdm
 
 from dbgym.spaces.observations.qppnet.features import QPPNetFeatures
+from dbgym.spaces.observations.gpredictor.features import GpredictorFeatures
 from dbgym.util.sql import substitute
 
 
@@ -311,6 +312,13 @@ class WorkloadRunner:
         sql_prefix = None
         if isinstance(obs_space, QPPNetFeatures):
             sql_prefix = "EXPLAIN (ANALYZE, FORMAT JSON, VERBOSE) "
+        elif isinstance(obs_space, GpredictorFeatures):
+            # TODO: Support various formats, so QSS can be supported.
+            sql_prefix = "EXPLAIN (ANALYZE, FORMAT JSON, VERBOSE) "
+            # Graphs must be built as batches.
+            curr_batch = 0
+            graph_idx_map = dict()
+            curr_batch_base_ou_idx = 0
 
         with engine.connect(close_with_result=False).execution_options(autocommit=False) as conn:
             observations, info = [], {}
@@ -391,6 +399,35 @@ class WorkloadRunner:
                                     )
                                     current_observation_idx += len(new_observations)
                                     observations.extend(new_observations)
+                            elif isinstance(obs_space, GpredictorFeatures) and prefix_success:
+                                # observations is a [query_plan] where query_plan = [plan_features_and_time],
+                                # i.e., [[plan_features_and_time]]
+                                # We want to batch based on continuous queries to explicitly build the graph.
+                                # observations is a [query_plan] where query_plan = [plan_features_and_time],
+                                # i.e., [[plan_features_and_time]]
+                                assert len(results) == 1, "Multi-query SQL?"
+                                assert len(results[0]) == 1, "Multi-column result for EXPLAIN?"
+                                result_dicts = results[0][0]
+                                for result_dict in result_dicts:
+                                    new_observations = obs_space.generate(
+                                        result_dict,
+                                        work.work_query_num,
+                                        current_observation_idx,
+                                        # Populate the neighboring map of the graph.
+                                        curr_batch_base_ou_idx,
+                                        graph_idx_map,
+                                    )
+                                    current_observation_idx += len(new_observations)
+                                    observations.extend(new_observations)
+                                    curr_batch += 1
+
+                                    if curr_batch >= obs_space.batch():
+                                        curr_batch = 0
+                                        graph_idx_map = dict()
+                                        curr_batch_base_ou_idx = len(observations)
+                                        # Oid in range 0...N-1, for current batch.
+                                        for oid in graph_idx_map:
+                                            observations[curr_batch_base_ou_idx + oid]["Neighbors"] = np.array(graph_idx_map[oid])
                         okay += 1
                     except SQLAlchemyError as e:
                         if print_errors:

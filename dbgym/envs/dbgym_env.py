@@ -12,6 +12,7 @@ from dbgym.envs.trainer import PostgresTrainer
 from dbgym.envs.workload_runner import WorkloadRunner
 from dbgym.spaces.index import IndexSpace
 from dbgym.spaces.observations.qppnet.features import QPPNetFeatures
+from dbgym.spaces.observations.gpredictor.features import GpredictorFeatures
 
 
 class DbGymEnv(gym.Env):
@@ -29,7 +30,7 @@ class DbGymEnv(gym.Env):
         if gym_spec.model == 'qppnet':
             self.observation_space = QPPNetFeatures(gym_spec=gym_spec, seed=seed)
         elif gym_spec.model == 'gpredictor':
-            pass
+            self.observation_space = GpredictorFeatures(gym_spec=gym_spec, seed=seed)
         elif gym_spec.model == 'automl':
             pass
 
@@ -50,6 +51,7 @@ class DbGymEnv(gym.Env):
         if self._db_dirty:
             self._trainer.create_target_dbms()
             self._db_dirty = False
+        # TODO: only supporting single terminal running.
         observation, info = self._run_workload()
         return observation, info
 
@@ -61,6 +63,11 @@ class DbGymEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def _run_workload(self) -> Tuple[ObsType, dict]:
+        '''
+        This real-time run workload logic only simulates single terminal case.
+        For parallel case, lauching benchbase then collecting internal catalog
+        may instead be the correct thing to do.
+        '''
         engine = create_engine(
             self._trainer.get_target_dbms_connstr_sqlalchemy(),
             poolclass=NullPool,
