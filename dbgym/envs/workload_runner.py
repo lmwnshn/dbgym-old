@@ -10,7 +10,7 @@ import pandas as pd
 import psutil
 import sqlalchemy
 from gym.core import ObsType
-from gym.spaces import Space
+from dbgym.spaces.observations.base import BaseFeatureSpace
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection, CursorResult, Engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -285,10 +285,9 @@ class WorkloadRunner:
         self,
         workload_db_path: Path,
         engine: Engine,
-        obs_space: Space,
+        obs_space: BaseFeatureSpace,
         current_observation_idx=0,
-        print_errors=False,
-        try_prepare=False,
+        runner_args:dict=None,
     ) -> tuple[ObsType, dict]:
         """
 
@@ -300,17 +299,14 @@ class WorkloadRunner:
             The observation space to generate features for.
         current_observation_idx:int
             The current observation index (i.e., the first observation generated will use this index).
-        print_errors:bool
-            True if errors while running the workload should be printed. False otherwise.
-            Note that there may be many errors when transforming or synthesizing workloads.
 
         Returns
         -------
 
         """
-        sql_prefix = None
-        if isinstance(obs_space, QPPNetFeatures):
-            sql_prefix = "EXPLAIN (ANALYZE, FORMAT JSON, VERBOSE) "
+        print_errors = runner_args.get("print_errors", True)
+        try_prepare = runner_args.get("try_prepare", False)
+        sql_prefix = obs_space.SQL_PREFIX
 
         with engine.connect(close_with_result=False).execution_options(autocommit=False) as conn:
             observations, info = [], {}

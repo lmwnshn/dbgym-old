@@ -162,7 +162,7 @@ def _parse(sql):
     return new_sql, tuple(params)
 
 
-def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
+def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path: Path, save_path: Path):
     assert postgresql_csvlog_path.suffix == ".csv", f"CSVLOG format? {postgresql_csvlog_path}"
 
     Path(save_path).unlink(missing_ok=True)
@@ -225,3 +225,82 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path, save_path):
     keys = list(insert_batch.keys())
     for key in keys:
         try_insert(key, batch_threshold=0)
+
+
+def convert_sqls_to_postgresql_csvlog(sqls: list[str], save_path: Path):
+    # TODO(WAN): Obviously, very incomplete.
+    start_ts = pd.Timestamp.now(tz="UTC")
+    current_ts = start_ts
+    user_name = "noisepage_user"
+    database_name = "noisepage_pass"
+    process_id = 15721
+    connection_from = "127.0.0.1:50721"
+    session_id = f"{int(start_ts.timestamp()):x}.{process_id:x}"
+    session_line_num = 1
+    command_tag = "idle"
+    session_start_time = start_ts
+    virtual_transaction_id_backend_number = 1
+    virtual_transaction_id_counter = 0
+    transaction_id = 0
+    error_severity = "LOG"
+    sql_state_code = "00000"
+    detail = ""
+    hint = ""
+    internal_query = ""
+    internal_query_pos = ""
+    context = ""
+    query = ""
+    query_pos = ""
+    location = ""
+    application_name = "psql"
+    backend_type = "client backend"
+    leader_pid = ""
+    query_id = 0
+
+    def quote(s: str):
+        return f'"{s}"'
+
+    def format_ts(ts: pd.Timestamp):
+        tz_format = "%Y-%m-%d %H:%M:%S.%f"
+        time = ts.strftime(tz_format)[:-3]
+        timezone = ts.strftime("%Z")
+        return f"{time} {timezone}"
+
+    with open(save_path, "w") as csvfile:
+        for sql in sqls:
+            current_ts += pd.Timedelta(seconds=1)
+            assert '"' not in sql, "Bad SQL query?"
+            message = f"statement: {sql}"
+            session_line_num += 1
+            virtual_transaction_id_counter += 1
+            virtual_transaction_id = f"{virtual_transaction_id_backend_number}/{virtual_transaction_id_counter}"
+
+            output = (
+                f"{format_ts(current_ts)},"
+                f"{quote(user_name)},"
+                f"{quote(database_name)},"
+                f"{process_id},"
+                f"{quote(connection_from)},"
+                f"{session_id},"
+                f"{session_line_num},"
+                f"{quote(command_tag)},"
+                f"{format_ts(session_start_time)},"
+                f"{virtual_transaction_id},"
+                f"{transaction_id},"
+                f"{error_severity},"
+                f"{sql_state_code},"
+                f"{quote(message)},"
+                f"{detail},"
+                f"{hint},"
+                f"{internal_query},"
+                f"{internal_query_pos},"
+                f"{context},"
+                f"{query},"
+                f"{query_pos},"
+                f"{location},"
+                f"{quote(application_name)},"
+                f"{quote(backend_type)},"
+                f"{leader_pid},"
+                f"{query_id}"
+            )
+            print(output, file=csvfile)

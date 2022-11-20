@@ -7,10 +7,13 @@ import pandas as pd
 from gym import spaces
 from sklearn.preprocessing import MinMaxScaler
 
-from dbgym.envs.gym_spec import GymSpec
+from dbgym.spaces.observations.base import BaseFeatureSpace
+from dbgym.envs.database_snapshot import DatabaseSnapshot
 
 
-class QPPNetFeatures(spaces.Sequence):
+class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
+    SQL_PREFIX = "EXPLAIN (ANALYZE, FORMAT JSON, VERBOSE) "
+
     _node_types = [
         "Aggregate",
         "Append",
@@ -79,26 +82,26 @@ class QPPNetFeatures(spaces.Sequence):
 
     def __init__(
         self,
-        gym_spec: GymSpec,
+        db_snapshot: DatabaseSnapshot,
         seed: int = 15721,
     ):
-        assert len(gym_spec.snapshot["schemas"]) == 1, "No support for multiple schemas."
-        self._gym_spec = gym_spec
-        self._relations = [table_name for _, table_name, _ in self._gym_spec.schema_summary]
+        assert len(db_snapshot.snapshot["schemas"]) == 1, "No support for multiple schemas."
+        self._db_snapshot = db_snapshot
+        self._relations = [table_name for _, table_name, _ in self._db_snapshot.schema_summary]
         self._attribute_names = {
             table_name: [column["name"] for column in attributes["columns"]]
-            for _, table_name, attributes in self._gym_spec.schema_summary
+            for _, table_name, attributes in self._db_snapshot.schema_summary
         }
         self._attribute_stats = {
             table_name: {column["name"]: column["stats"] for column in attributes["columns"]}
-            for _, table_name, attributes in self._gym_spec.schema_summary
+            for _, table_name, attributes in self._db_snapshot.schema_summary
         }
         self._indexes = [
             (table_name, index["name"])
-            for _, table_name, attrs in self._gym_spec.schema_summary
+            for _, table_name, attrs in self._db_snapshot.schema_summary
             for index in attrs["indexes"]
         ]
-        self._max_num_attributes = max([len(attrs["columns"]) for _, _, attrs in self._gym_spec.schema_summary])
+        self._max_num_attributes = max([len(attrs["columns"]) for _, _, attrs in self._db_snapshot.schema_summary])
         self._num_relations = len(self._relations)
         self._num_indexes = len(self._indexes)
 
@@ -152,6 +155,8 @@ class QPPNetFeatures(spaces.Sequence):
             ("Observation Index", output_observation_index),
             ("Query Hash", query_hash),
             ("Query Num", self._singleton(query_num, dtype=np.int32)),
+            ("TupTime Count", plan_dict["TupTime Count"]),
+            ("TupTimes", plan_dict["TupTimes"]),
         ]
         observations.append(OrderedDict(ordered_dict_items))
         return observations
