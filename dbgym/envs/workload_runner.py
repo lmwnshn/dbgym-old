@@ -11,7 +11,7 @@ import psutil
 import sqlalchemy
 from gym.core import ObsType
 from dbgym.spaces.observations.base import BaseFeatureSpace
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import Connection, CursorResult, Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import SingletonThreadPool
@@ -19,6 +19,8 @@ from tqdm import tqdm
 
 from dbgym.spaces.observations.qppnet.features import QPPNetFeatures
 from dbgym.util.sql import substitute
+
+from dbgym.envs.database_snapshot import DatabaseSnapshot
 
 
 class Work(ABC):
@@ -281,8 +283,52 @@ def _submission_worker(
 
 
 class WorkloadRunner:
-    def run(
+
+    def setup(
         self,
+        engine: Engine,
+        runner_args: dict[str],
+    ):
+        self.vacuum(
+            engine,
+            tables=runner_args.get("vacuum_tables", None)
+        )
+        self.prewarm(
+            engine,
+            tables=runner_args.get("prewarm_tables", None),
+            indexes=runner_args.get("prewarm_indexes", None)
+        )
+
+    @staticmethod
+    def prewarm(
+        engine: Engine,
+        tables: list[str] = None,
+        indexes: list[str] = None,
+        create_extension=True,
+    ):
+        with engine.connect(close_with_result=False).execution_options(isolation_level="AUTOCOMMIT") as conn:
+            if create_extension:
+                conn.execute("CREATE EXTENSION IF NOT EXISTS pg_prewarm")
+            for table in (tables if tables is not None else []):
+                conn.execute(f"SELECT pg_prewarm('{table}')")
+            for index in (indexes if indexes is not None else []):
+                conn.execute(f"SELECT pg_prewarm('{index}')")
+
+    @staticmethod
+    def vacuum(
+        engine: Engine,
+        tables: list[str] = None,
+        full=True,
+        analyze=True,
+    ):
+        with engine.connect(close_with_result=False).execution_options(isolation_level="AUTOCOMMIT") as conn:
+            for table in (tables if tables is not None else []):
+                full_opt = "FULL " if full else ""
+                analyze_opt = "ANALYZE " if analyze else ""
+                conn.execute(f"VACUUM {full_opt}{analyze_opt}{table}")
+
+    @staticmethod
+    def run(
         workload_db_path: Path,
         engine: Engine,
         obs_space: BaseFeatureSpace,
@@ -309,6 +355,9 @@ class WorkloadRunner:
         sql_prefix = obs_space.SQL_PREFIX
 
         with engine.connect(close_with_result=False).execution_options(autocommit=False) as conn:
+            for sql in runner_args.get("sql_setup", []):
+                conn.execute(sql)
+
             observations, info = [], {}
             # Start a worker thread.
             prepare_queue = Queue()

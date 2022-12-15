@@ -32,7 +32,7 @@ fi
 if [ ! -d "${TPCH_DATA}" ]; then
   mkdir -p "${TPCH_DATA}"
   cd ./build/tpch-kit/dbgen
-  ./dbgen -vf -s 1
+  ./dbgen -vf -s 10
   # cp dss.ddl "${TPCH_DATA}/dss.ddl"
   # Use the BenchBase schema.
   cp "${TPCH_SCHEMA}" "${TPCH_DATA}/schema.sql"
@@ -67,4 +67,5 @@ for table_name in "${tpch_tables[@]}"; do
     -c "\\COPY ${table_name} FROM '${table_path}' CSV DELIMITER '|'"
 done
 
+rm -rf ./artifact/prod_dbms/state
 PGPASSWORD=${POSTGRES_PASSWORD} pg_dump --host=localhost --username=${POSTGRES_USER} --format=directory --file=./artifact/prod_dbms/state ${POSTGRES_DB}

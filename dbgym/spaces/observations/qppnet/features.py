@@ -155,8 +155,8 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             ("Observation Index", output_observation_index),
             ("Query Hash", query_hash),
             ("Query Num", self._singleton(query_num, dtype=np.int32)),
-            ("TupTime Count", plan_dict["TupTime Count"]),
-            ("TupTimes", plan_dict["TupTimes"]),
+            # ("TupTime Count", plan_dict["TupTime Count"]),
+            # ("TupTimes", plan_dict["TupTimes"]),
         ]
         observations.append(OrderedDict(ordered_dict_items))
         return observations

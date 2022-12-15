@@ -188,7 +188,8 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path: Path, save_pat
 
     categories = df["query_template"].dtype.categories
     templates = {query_template: template_id for template_id, query_template in enumerate(categories, 1)}
-    for query_template, template_id in tqdm(templates.items(), total=len(templates), desc="Writing out templates."):
+    for query_template, template_id in tqdm(templates.items(), total=len(templates),
+                                            leave=False, desc="Writing out templates."):
         try_insert("query_template", (template_id, query_template))
         num_params = len(df[df["query_template"] == query_template].iloc[0]["query_params"])
         if num_params > 0:
@@ -204,7 +205,7 @@ def convert_postgresql_csvlog_to_workload(postgresql_csvlog_path: Path, save_pat
 
     template_params_map = {}
     for query_num, (query_template, query_params, elapsed_s) in enumerate(
-        tqdm(df.itertuples(index=False), total=len(df), desc="Writing out params."), 1
+        tqdm(df.itertuples(index=False), total=len(df), leave=False, desc="Writing out params."), 1
     ):
         template_id = templates[query_template]
 

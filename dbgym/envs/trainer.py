@@ -1,6 +1,8 @@
 from abc import ABC
 from dbgym.envs.gym_spec import GymSpec
 
+from sqlalchemy import create_engine
+
 import requests
 
 
@@ -52,6 +54,7 @@ class PostgresTrainer(Trainer):
             self, service_url: str, gym_spec: GymSpec, seed: int = 15721,
             gh_user=None, gh_repo=None, branch=None, build_type=None,
             db_name=None, db_user=None, db_pass=None, host=None, port=None,
+            pgconf_path=None,
     ):
         super().__init__(service_url, gym_spec, seed)
         self._gh_user = gh_user
@@ -63,13 +66,16 @@ class PostgresTrainer(Trainer):
         self._db_pass = db_pass
         self._host = host
         self._port = port
+        self._pgconf_path = pgconf_path
 
     def __enter__(self):
         try:
+            self.dbms_overwrite_conf()
             self.dbms_start()
         except FileNotFoundError:
             self.dbms_bootstrap()
             self.dbms_init()
+            self.dbms_overwrite_conf()
             self.dbms_start()
             self.dbms_restore()
         return self
@@ -118,8 +124,11 @@ class PostgresTrainer(Trainer):
         return self.run_targets(targets)
 
     def dbms_restart(self):
+        print("Restart stop.")
         self.dbms_stop()
+        print("Restart start.")
         self.dbms_start()
+        print("Restart done.")
 
     def dbms_connstr(self) -> str:
         targets = [
@@ -142,6 +151,50 @@ class PostgresTrainer(Trainer):
                 "host": self._host,
                 "port": self._port,
                 "state_path": str(self._gym_spec.historical_state.historical_state_path),
+            }),
+        ]
+        return self.run_targets(targets)
+
+    def dbms_overwrite_conf(self):
+        targets = [
+            (self._service_url + "/postgres/pg_auto_conf/", {
+                "conf_path": str(self._pgconf_path),
+            }),
+        ]
+        responses = self.run_targets(targets)
+        assert len(responses) == 1
+
+        try:
+            if "overwrote " in responses[0]["status"]:
+                print("New config, restarting.")
+                self.dbms_restart()
+            else:
+                print("Same config as before.")
+        except FileNotFoundError:
+            # Probably not compiled yet.
+            pass
+
+    def nyoom_install(self):
+        targets = [
+            (self._service_url + "/postgres/nyoom_install/", {}),
+        ]
+        return self.run_targets(targets)
+
+    def nyoom_start(self):
+        targets = [
+            (self._service_url + "/postgres/nyoom_start/", {
+                "db_name": self._db_name,
+                "db_user": self._db_user,
+                "db_pass": self._db_pass,
+                "port": self._port,
+            }),
+        ]
+        return self.run_targets(targets)
+
+    def nyoom_stop(self):
+        targets = [
+            (self._service_url + "/postgres/nyoom_stop/", {
+                "port": self._port,
             }),
         ]
         return self.run_targets(targets)

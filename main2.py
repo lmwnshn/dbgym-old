@@ -20,7 +20,7 @@ def convert_tpch_queries_to_workload(artifact_path):
     sqls = []
     for tpch_seed in [15721]:
         for qnum in range(1, 22+1):
-            filepath = f"/home/wanshenl/git/postgres/artifact/tpch-kit/queries/{tpch_seed}/{qnum}.sql"
+            filepath = artifact_path / f"tpch-kit/queries/{tpch_seed}/{qnum}.sql"
             with open(filepath) as f:
                 lines = []
                 for line in f:
@@ -54,21 +54,44 @@ def main():
 
     observations_path = artifact_path / "gym" / "observations" / "train.parquet"
     snapshot_path = artifact_path / "gym" / "snapshots" / "historical.pickle"
+    pgconf_path = Path("expt/postgres.conf").absolute()
+
     with PostgresTrainer(
             service_url="http://localhost:5000/", gym_spec=gym_spec, seed=seed,
             gh_user="lmwnshn", gh_repo="postgres", branch="wan", build_type="release",
             db_name="noisepage_db", db_user="noisepage_user", db_pass="noisepage_pass",
-            host="localhost", port=15420,
+            host="localhost", port=15420, pgconf_path=pgconf_path,
     ) as trainer:
         engine = create_engine(trainer.dbms_connstr())
         if not snapshot_path.exists():
+            print("Creating snapshot.")
             db_snapshot = DatabaseSnapshot(engine)
             db_snapshot.to_file(snapshot_path)
         db_snapshot = DatabaseSnapshot.from_file(snapshot_path)
 
+        print("Installing nyoom.")
+        trainer.nyoom_install()
+        trainer.dbms_restart()
+
         action_space = FakeIndexSpace(1)
         observation_space = QPPNetFeatures(db_snapshot=db_snapshot, seed=seed)
-        runner_args = {}
+
+        print("Checking summary.")
+        all_tables, all_indexes = [], []
+        for _, table_name, table_attr in db_snapshot.schema_summary:
+            all_tables.append(table_name)
+            for index in table_attr["indexes"]:
+                all_indexes.append(index["name"])
+        all_tables, all_indexes = [], []
+        runner_args = {
+            "prewarm_indexes": all_indexes,
+            "prewarm_tables": all_tables,
+            "vacuum_tables": all_tables,
+            "sql_setup": ["CREATE EXTENSION IF NOT EXISTS nyoom"],
+        }
+
+        print("Starting nyoom.")
+        trainer.nyoom_start()
 
         env = gym.make(
             "dbgym/DbGym-v0",
@@ -77,12 +100,14 @@ def main():
             trainer=trainer,
             action_space=action_space,
             observation_space=observation_space,
-            runner_args=runner_args
+            runner_args=runner_args,
         )
 
         observations, info = env.reset(seed=15721)
         train_df = observation_space.convert_observations_to_df(observations)
         train_df.to_parquet(observations_path)
+
+        trainer.nyoom_stop()
         env.close()
 
 
