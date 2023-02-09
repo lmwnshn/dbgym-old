@@ -1,5 +1,5 @@
-from pathlib import Path
 import os
+from pathlib import Path
 
 gym_db_name = os.getenv("GYM_DB_NAME")
 gym_db_pass = os.getenv("GYM_DB_PASS")

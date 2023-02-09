@@ -1,5 +1,6 @@
-from trainer.extensions import db
 import sqlalchemy as sa
+
+from trainer.extensions import db
 
 
 class Instance(db.Model):

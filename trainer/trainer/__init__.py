@@ -1,5 +1,6 @@
-from flask import Flask
 from config import Config
+from flask import Flask
+
 from trainer.extensions import db
 
 
@@ -10,10 +11,12 @@ def create_app(config=Config):
     db.init_app(app)
 
     from trainer.model.instance import Instance
+
     with app.app_context():
         db.create_all()
 
     from trainer.postgres import postgres
+
     app.register_blueprint(postgres, url_prefix="/postgres")
 
     @app.route("/")

@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-from typing import Optional
-from flask import Blueprint
-from flask import abort
-from flask import current_app
-from flask import request
-from trainer.extensions import db
-
-import shutil
 import contextlib
 import os
+import shutil
+import time
+from pathlib import Path
+from typing import Optional
+
+from flask import Blueprint, current_app, request
 from plumbum import local
 from plumbum.machines import LocalCommand
 
+from trainer.extensions import db
 from trainer.model.instance import Instance
-
-import time
-from pathlib import Path
 
 postgres = Blueprint("postgres", __name__)
 
@@ -58,7 +54,7 @@ def run_command(command: LocalCommand, expected_retcodes: int | list[int] | None
         "command": str(command),
         "retcode": retcode,
         "stdout": stdout,
-        "stderr": stderr
+        "stderr": stderr,
     }
     return result
 
