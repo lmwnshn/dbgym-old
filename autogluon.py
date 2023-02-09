@@ -1,5 +1,6 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 from autogluon.tabular import TabularDataset, TabularPredictor
 
 experiments = [
@@ -14,6 +15,7 @@ experiments = [
 time_limit = 300
 retrain = True
 
+
 def flatten(df):
     flatteneds = []
     for col in ["Children Observation Indexes", "Features", "Query Hash"]:
@@ -23,6 +25,7 @@ def flatten(df):
     for col in ["Node Type", "Observation Index", "Query Num", "Actual Total Time (us)"]:
         flatteneds.append(df[col])
     return pd.concat(flatteneds, axis=1)
+
 
 for experiment in experiments:
     (train_name, train_variation), (test_name, test_variation) = experiment
@@ -36,23 +39,25 @@ for experiment in experiments:
     test_data = TabularDataset(flatten(test_df))
 
     if retrain:
-        predictor = TabularPredictor(label="Actual Total Time (us)", path=save_path).fit(train_data, time_limit=time_limit)
+        predictor = TabularPredictor(label="Actual Total Time (us)", path=save_path).fit(
+            train_data, time_limit=time_limit
+        )
     else:
         predictor = TabularPredictor.load(save_path)
-    
+
     # Predict.
     y_pred = predictor.predict(test_data)
     eval_df = pd.concat([y_pred, test_data["Actual Total Time (us)"]], axis=1)
     eval_df.columns = ["Predicted Latency (us)", "Actual Latency (us)"]
-    
+
     metrics_df = eval_df.copy()
     metrics_df["diff (us)"] = (metrics_df["Predicted Latency (us)"] - metrics_df["Actual Latency (us)"]).abs()
     metrics_df["q_err"] = np.nan_to_num(
         np.maximum(
             metrics_df["Predicted Latency (us)"] / metrics_df["Actual Latency (us)"],
-            metrics_df["Actual Latency (us)"] / metrics_df["Predicted Latency (us)"]
+            metrics_df["Actual Latency (us)"] / metrics_df["Predicted Latency (us)"],
         ),
-        nan=np.inf
+        nan=np.inf,
     )
     print(metrics_df["diff (us)"].describe())
     print(metrics_df["q_err"].describe())

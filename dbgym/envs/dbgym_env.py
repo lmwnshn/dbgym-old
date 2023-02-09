@@ -1,9 +1,9 @@
 import time
 from typing import Optional, Tuple
 
-import gym
+import gymnasium
 import numpy as np
-from gym.core import ActType, ObsType
+from gymnasium.core import ActType, ObsType
 from sqlalchemy.engine import create_engine
 from sqlalchemy.pool import NullPool
 
@@ -14,7 +14,7 @@ from dbgym.spaces.index import IndexSpace
 from dbgym.spaces.observations.qppnet.features import QPPNetFeatures
 
 
-class DbGymEnv(gym.Env):
+class DbGymEnv(gymnasium.Env):
     def __init__(self, gym_spec: GymSpec, seed=15721, try_prepare=False, print_errors=False, hack=False):
         self._rng = np.random.default_rng(seed=seed)
         self._gym_spec = gym_spec
@@ -33,10 +33,10 @@ class DbGymEnv(gym.Env):
         self._print_errors = print_errors
 
     def reset(
-            self,
-            *,
-            seed: Optional[int] = None,
-            options: Optional[dict] = None,
+        self,
+        *,
+        seed: Optional[int] = None,
+        options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
         # Reset the RNG.
         self._rng = np.random.default_rng(seed=seed)

@@ -364,7 +364,7 @@ class QPPNetFeatures(spaces.Sequence):
         return df
 
     @staticmethod
-    def normalize_observations_df(observations, scalers:Optional[dict[str, MinMaxScaler]]=None):
+    def normalize_observations_df(observations, scalers: Optional[dict[str, MinMaxScaler]] = None):
         df = observations.copy()
         groups = df.groupby("Node Type")
         if scalers is None:

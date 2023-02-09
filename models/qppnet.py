@@ -6,6 +6,7 @@ Modifications:
 - Add biased sampling to avoid missing out (and therefore not learning) for rare queries, especially in OLTP settings.
 - Minimize MSE instead of RMSE to handle cases where sqrt is not differentiable at 0 (e.g., OLTP).
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path

@@ -63,7 +63,6 @@ class PostgresTrainer(Trainer):
                 inspector = inspect(engine)
                 self._gym_spec.snapshot_db(engine, inspector)
 
-
     def get_target_dbms_connstr_sqlalchemy(self) -> str:
         return f"postgresql+psycopg2://{self._db_user}:{self._db_pass}@{self._cluster_host}:{self._cluster_port}/{self._db_name}"
 

@@ -1,5 +1,6 @@
 import pglast
 
+
 def substitute(query, params, onerror="raise"):
     # Consider '$2' -> "abc'def'ghi".
     # This necessitates the use of a SQL-aware substitution,

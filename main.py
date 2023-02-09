@@ -1,10 +1,11 @@
+import pickle
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-import gym
+import gymnasium
 import pandas as pd
-import pickle
+from tqdm import tqdm
 
 from dbgym.envs.gym_spec import GymSpec
 from dbgym.envs.state import PostgresState
@@ -17,7 +18,6 @@ from dbgym.workload.transform import (
     SampleFracQueries,
 )
 from models.qppnet import QPPNet
-from tqdm import tqdm
 
 
 @dataclass
@@ -74,7 +74,7 @@ for config in experiment_configs:
         if not observations_path.exists():
             # The env_checker is pretty slow, taking about 200s for 1.2m datapoints.
             # Obviously, debug with the env_checker enabled! It catches bugs.
-            env = gym.make(
+            env = gymnasium.make(
                 "dbgym/DbGym-v0",
                 disable_env_checker=True,
                 gym_spec=gym_spec,

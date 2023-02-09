@@ -5,11 +5,11 @@ from typing import Optional
 
 import pandas as pd
 from sqlalchemy import create_engine
+from tqdm import tqdm
 
 from dbgym.envs.workload import Workload
 from dbgym.util.postgres_workload import convert_postgresql_csvlog_to_workload
 from dbgym.workload.transform import WorkloadTransform
-from tqdm import tqdm
 
 
 @dataclass
