@@ -1,0 +1,5 @@
+flask
+flask-sqlalchemy
+gunicorn
+plumbum
+psycopg[binary,pool]

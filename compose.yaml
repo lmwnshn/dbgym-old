@@ -1,0 +1,33 @@
+services:
+  gym_db:
+    environment:
+      POSTGRES_DB: "${GYM_DB_NAME}"
+      POSTGRES_PASSWORD: "${GYM_DB_PASS}"
+      POSTGRES_USER: "${GYM_DB_USER}"
+    image: "postgres:15"
+    volumes:
+      - "gym_db:/var/lib/postgresql/data"
+
+  trainer:
+    build:
+      context: "trainer"
+    depends_on:
+      - "gym_db"
+    environment:
+      GYM_DB_NAME: "${GYM_DB_NAME}"
+      GYM_DB_PASS: "${GYM_DB_PASS}"
+      GYM_DB_USER: "${GYM_DB_USER}"
+      TRAINER_PORT: "${TRAINER_PORT}"
+      TRAINER_PG_NAME: "${TRAINER_PG_NAME}"
+      TRAINER_PG_PASS: "${TRAINER_PG_PASS}"
+      TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
+      TRAINER_PG_USER: "${TRAINER_PG_USER}"
+    ports:
+      - '${TRAINER_PORT}:${TRAINER_PORT}'
+      - '${TRAINER_PG_PORT}:${TRAINER_PG_PORT}'
+    volumes:
+      - "trainer:/trainer"
+
+volumes:
+  gym_db: {}
+  trainer: {}
