@@ -4,9 +4,9 @@ source .env
 
 set -euxo pipefail
 
-./setup/tpch_sf1.sh
-./setup/tpch_schema.sh
-./setup/tpch_queries.sh
+./setup/tpch/tpch_sf1.sh
+./setup/tpch/tpch_schema.sh
+./setup/tpch/tpch_queries.sh
 
 docker compose down
 docker compose up --build --detach --wait
