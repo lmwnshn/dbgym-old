@@ -1,4 +1,4 @@
-from config import Config
+from trainer.config import Config
 from flask import Flask
 
 from trainer.extensions import db

@@ -1,0 +1,6 @@
+flask
+flask-apscheduler
+flask-sqlalchemy
+gunicorn
+plumbum
+psycopg[binary,pool]

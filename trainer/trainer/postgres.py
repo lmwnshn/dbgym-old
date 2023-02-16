@@ -27,6 +27,17 @@ def tmp_cwd(tmp_wd):
         os.chdir(old_dir)
 
 
+def run_command(command: LocalCommand, expected_retcodes: int | list[int] | None = 0):
+    retcode, stdout, stderr = command.run(retcode=expected_retcodes)
+    result = {
+        "command": str(command),
+        "retcode": retcode,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+    return result
+
+
 def get_trainer_dir() -> Path:
     trainer_dir: Path = current_app.config["TRAINER_DIR"]
     return trainer_dir.absolute()
@@ -48,34 +59,46 @@ def get_pg_data_dir() -> Path:
     return (get_pg_bin_dir() / "pgdata").absolute()
 
 
-def run_command(command: LocalCommand, expected_retcodes: int | list[int] | None = 0):
-    retcode, stdout, stderr = command.run(retcode=expected_retcodes)
-    result = {
-        "command": str(command),
-        "retcode": retcode,
-        "stdout": stdout,
-        "stderr": stderr,
-    }
-    return result
+@postgres.route("/exists/", methods=["POST"])
+def exists():
+    return {"initialized": get_pg_data_dir().exists()}
 
 
 @postgres.route("/clone/", methods=["POST"])
 def clone():
-    gh_user = request.form.get("gh_user", default="lmwnshn")
-    gh_repo = request.form.get("gh_repo", default="postgres")
-    gh_branch = request.form.get("gh_branch", default="wan")
+    gh_user = "lmwnshn"
+    gh_repo = "postgres"
+    gh_branch = "wan"
+
+    req_json = request.get_json(silent=True)
+    if req_json is not None:
+        gh_user = req_json.get("gh_user", default=gh_user)
+        gh_repo = req_json.get("gh_repo", default=gh_repo)
+        gh_branch = req_json.get("gh_branch", default=gh_branch)
+
     args = ["clone", f"https://github.com/{gh_user}/{gh_repo}.git", "--depth", "1"]
     if gh_branch is not None:
         args.extend(["--single-branch", "--branch", gh_branch])
     with tmp_cwd(get_trainer_dir()):
         local["rm"]["-rf", gh_repo].run()
-        command = local["git"][args]
+        db_port = int(os.getenv("TRAINER_PG_PORT"))
+        query = db.select(Instance).where(Instance.port == db_port)
+        instance: Optional[Instance] = db.session.execute(query).scalar_one_or_none()
+        if instance is not None:
+            db.session.delete(instance)
+            db.session.commit()
+        command = local["git"][args, "postgres"]
         return run_command(command)
 
 
 @postgres.route("/configure/", methods=["POST"])
 def configure():
-    build_type = request.form.get("build_type", default="release")
+    build_type = "release"
+
+    req_json = request.get_json(silent=True)
+    if req_json is not None:
+        build_type = req_json.get("build_type", default=build_type)
+
     config_sh = get_pg_dir() / "cmudb" / "build" / "configure.sh"
     with tmp_cwd(get_pg_dir()):
         command = local[config_sh][build_type, get_pg_build_dir()]
@@ -93,7 +116,13 @@ def make():
 def initdb():
     shutil.rmtree(get_pg_data_dir(), ignore_errors=True)
     command = local[get_pg_bin_dir() / "initdb"]["-D", get_pg_data_dir()]
-    return run_command(command)
+    result = run_command(command)
+    with tmp_cwd(get_pg_data_dir()):
+        with open("pg_hba.conf", "a") as f:
+            print("host all all 0.0.0.0/0 md5", file=f)
+        with open("postgresql.conf", "a") as f:
+            print("listen_addresses = '*'", file=f)
+    return result
 
 
 @postgres.route("/start/", methods=["POST"])
@@ -103,7 +132,7 @@ def start():
     db_pass = os.getenv("TRAINER_PG_PASS")
     db_user = os.getenv("TRAINER_PG_USER")
 
-    query = db.select(Instance).filter_by(port=db_port)
+    query = db.select(Instance).where(Instance.port == db_port)
     instance: Optional[Instance] = db.session.execute(query).scalar_one_or_none()
 
     if instance is not None and instance.pid is not None:
@@ -171,9 +200,9 @@ def start():
 @postgres.route("/stop/", methods=["POST"])
 def stop():
     db_port = int(os.getenv("TRAINER_PG_PORT"))
-    query = db.select(Instance).filter_by(port=db_port)
+    query = db.select(Instance).where(Instance.port == db_port)
     instance: Optional[Instance] = db.session.execute(query).scalar_one_or_none()
-    if instance.pid is None:
+    if instance is None or instance.pid is None:
         return {"message": f"No PID for {instance}"}
     command = local["kill"]["-INT", instance.pid]
     result = run_command(command, expected_retcodes=[0, 1])

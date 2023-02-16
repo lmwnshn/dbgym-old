@@ -1,0 +1,13 @@
+autogluon
+gymnasium
+matplotlib
+numpy
+pandas
+pglast
+psycopg
+pyarrow
+requests
+scikit-learn
+sqlalchemy
+torch
+tqdm

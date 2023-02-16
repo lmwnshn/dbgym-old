@@ -16,7 +16,7 @@ class Instance(db.Model):
 
     def __repr__(self):
         return (
-            "<Instance "
+            "<trainer_instance "
             f"{self.port=} "
             f"{self.db_type=} "
             f"{self.initialized=} "
