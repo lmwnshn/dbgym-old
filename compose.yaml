@@ -27,11 +27,11 @@ services:
     ports:
       - "${TRAINER_PORT}:${TRAINER_PORT}"
       - "${TRAINER_PG_PORT}:${TRAINER_PG_PORT}"
-    shm_size: "8gb"
+    shm_size: "48gb"
     volumes:
       - "trainer:/trainer"
       - "tpch_sf1:/tpch_sf1"
-#      - "tpch_sf10:/tpch_sf10"
+      - "tpch_sf10:/tpch_sf10"
 
   monitor:
     build:
@@ -88,7 +88,7 @@ volumes:
     external: true
   tpch_sf1:
     external: true
-#  tpch_sf10:
-#    external: true
+  tpch_sf10:
+    external: true
   tpch_queries:
     external: true

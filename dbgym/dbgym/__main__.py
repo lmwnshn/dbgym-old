@@ -105,7 +105,7 @@ def load(dataset):
 
 
 def load_tpch():
-    tpch_sf = Path("/tpch_sf1").absolute()
+    tpch_sf = Path("/tpch_sf10").absolute()
     engine = create_engine(Config.TRAINER_PG_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
     with engine.connect() as conn:
         tables = ["region", "nation", "part", "supplier", "partsupp", "customer", "orders", "lineitem"]

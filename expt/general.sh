@@ -4,6 +4,7 @@ source .env
 
 set -euxo pipefail
 
+sudo apt install make gcc
 ./setup/tpch/tpch_sf1.sh
 ./setup/tpch/tpch_schema.sh
 ./setup/tpch/tpch_queries.sh
