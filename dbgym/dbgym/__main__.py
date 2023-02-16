@@ -92,7 +92,7 @@ def pgtune():
     ]
     engine = create_engine(Config.TRAINER_PG_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
     with engine.connect() as conn:
-        for sql in pgconf_laptop:
+        for sql in pgconf_dev8:
             _exec(conn, sql)
 
 
