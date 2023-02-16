@@ -248,7 +248,7 @@ def hack_tablesample_tpch(workload: WorkloadTPCH):
 
 
 def main():
-    workload_seed_start, workload_seed_end = 15721, 15725
+    workload_seed_start, workload_seed_end = 15721, 16720
     workloads = [WorkloadTPCH(seed) for seed in range(workload_seed_start, workload_seed_end + 1)]
     train_workloads, test_workloads = train_test_split(workloads, test_size=0.2)
     tablesample_workloads = [hack_tablesample_tpch(workload) for workload in train_workloads]
