@@ -8,7 +8,7 @@ set -euxo pipefail
 IS_DEV_MACHINE=0
 if [[ "$(hostname --all-fqdns)" == *"db.pdl.local.cmu.edu"* ]]; then
   if ! docker info | grep "Docker Root Dir: /mnt/nvme0n1"; then
-    echo "Please set up the nvme drive on the dev machines: 'sudo ./setup/pdl.sh'"
+    echo "Please set up the nvme drive on the dev machines: 'sudo ./setup/docker/pdl.sh'"
     exit 1
   fi
   IS_DEV_MACHINE=1
