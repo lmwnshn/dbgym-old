@@ -28,5 +28,5 @@ mv ./*.tbl ./tbl_data
 cd "${ROOT_DIR}"
 
 docker run --volume=tpch_sf1:/tpch_sf1 --name tpch_sf1 busybox true
-docker cp ./build/tpch-kit/dbgen/tbl_data/. tpch_sf1:/tpch_sf1
+docker cp --quiet ./build/tpch-kit/dbgen/tbl_data/. tpch_sf1:/tpch_sf1
 docker rm tpch_sf1

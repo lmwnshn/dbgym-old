@@ -32,6 +32,6 @@ set -x
 cd "${ROOT_DIR}"
 
 docker run --volume=tpch_queries:/tpch_queries --name tpch_queries busybox true
-docker cp "./build/tpch-kit/dbgen/generated_queries/." tpch_queries:/tpch_queries
+docker cp --quiet "./build/tpch-kit/dbgen/generated_queries/." tpch_queries:/tpch_queries
 docker rm tpch_queries
 
