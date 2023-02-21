@@ -15,13 +15,13 @@ if [[ "$(hostname --all-fqdns)" == *"db.pdl.local.cmu.edu"* ]]; then
 fi
 
 if [[ ${IS_DEV_MACHINE} -eq 1 ]]; then
-  export BEHIND_PDL_PROXY=1
   export DOCKER_DATA_ROOT="/mnt/nvme0n1/docker"
+  export HTTP_PROXY="http://proxy.pdl.cmu.edu:3128/"
+  export HTTPS_PROXY="http://proxy.pdl.cmu.edu:3128/"
 else
-  export BEHIND_PDL_PROXY=0
   export DOCKER_DATA_ROOT="/var/lib/docker"
 fi
-export NO_PROXY_LIST="localhost,127.0.0.1,0.0.0.0,gym_db,monitor,trainer,dbgym"
+export NO_PROXY="localhost,127.0.0.1,0.0.0.0,gym_db,monitor,trainer,dbgym"
 export HOSTNAME=$(hostname)
 
 sudo apt install make gcc

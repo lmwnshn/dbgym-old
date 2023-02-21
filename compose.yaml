@@ -2,6 +2,9 @@ services:
   gym_db:
     container_name: "dbgym-gym_db"
     environment:
+      HTTP_PROXY: "${HTTP_PROXY}"
+      HTTPS_PROXY: "${HTTPS_PROXY}"
+      NO_PROXY: "${NO_PROXY}"
       POSTGRES_DB: "${GYM_DB_NAME}"
       POSTGRES_PASSWORD: "${GYM_DB_PASS}"
       POSTGRES_USER: "${GYM_DB_USER}"
@@ -16,6 +19,9 @@ services:
     depends_on:
       - "gym_db"
     environment:
+      HTTP_PROXY: "${HTTP_PROXY}"
+      HTTPS_PROXY: "${HTTPS_PROXY}"
+      NO_PROXY: "${NO_PROXY}"
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
       GYM_DB_USER: "${GYM_DB_USER}"
@@ -40,6 +46,9 @@ services:
     depends_on:
       - "trainer"
     environment:
+      HTTP_PROXY: "${HTTP_PROXY}"
+      HTTPS_PROXY: "${HTTPS_PROXY}"
+      NO_PROXY: "${NO_PROXY}"
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
       GYM_DB_USER: "${GYM_DB_USER}"
@@ -54,6 +63,9 @@ services:
     depends_on:
       - "trainer"
     environment:
+      HTTP_PROXY: "${HTTP_PROXY}"
+      HTTPS_PROXY: "${HTTPS_PROXY}"
+      NO_PROXY: "${NO_PROXY}"
       HOSTNAME: "${HOSTNAME}"
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
