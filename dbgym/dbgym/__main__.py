@@ -1,30 +1,27 @@
 # TODO(WAN):
 #  Bring back all the scheduling and PREPARE stuff that made sense in an OLTP world.
 #  Bring back the [historical, future] workload split if we're trying to do forecasting.
-
-from pathlib import Path
-from dbgym.env.dbgym import DbGymEnv
-
 import copy
-import pglast
+import os
+from pathlib import Path
+
 import gymnasium
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pglast
+from autogluon.tabular import TabularDataset, TabularPredictor
 from dbgym.config import Config
-from dbgym.state.database_snapshot import DatabaseSnapshot
+from dbgym.env.dbgym import DbGymEnv
 from dbgym.space.action.fake_index import FakeIndexSpace
 from dbgym.space.observation.qppnet.features import QPPNetFeatures
+from dbgym.state.database_snapshot import DatabaseSnapshot
 from dbgym.trainer.postgres import PostgresTrainer
-from sqlalchemy import create_engine, text, inspect
+from dbgym.workload.workload import Workload, WorkloadTPCH
+from sklearn.model_selection import train_test_split
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.engine.reflection import Inspector
-
-from sklearn.model_selection import train_test_split
-
-from dbgym.workload.workload import WorkloadTPCH
-
-from autogluon.tabular import TabularDataset, TabularPredictor
-
-import pandas as pd
-import numpy as np
 
 
 def _exec(conn: Connection, sql: str, verbose=True):
@@ -34,66 +31,28 @@ def _exec(conn: Connection, sql: str, verbose=True):
 
 
 def pgtune():
-    # TODO(WAN): make this something you can pass in.
-    pgconf_laptop = [
-        # DB Version: 15
-        # OS Type: linux
-        # DB Type: dw
-        # Total Memory (RAM): 16 GB
-        # CPUs num: 8
-        # Connections num: 20
-        # Data Storage: ssd
-        "ALTER SYSTEM SET max_connections = '20';",
-        "ALTER SYSTEM SET shared_buffers = '4GB';",
-        "ALTER SYSTEM SET effective_cache_size = '12GB';",
-        "ALTER SYSTEM SET maintenance_work_mem = '2GB';",
-        "ALTER SYSTEM SET checkpoint_completion_target = '0.9';",
-        "ALTER SYSTEM SET wal_buffers = '16MB';",
-        "ALTER SYSTEM SET default_statistics_target = '500';",
-        "ALTER SYSTEM SET random_page_cost = '1.1';",
-        "ALTER SYSTEM SET effective_io_concurrency = '200';",
-        "ALTER SYSTEM SET work_mem = '26214kB';",
-        "ALTER SYSTEM SET min_wal_size = '4GB';",
-        "ALTER SYSTEM SET max_wal_size = '16GB';",
-        "ALTER SYSTEM SET max_worker_processes = '8';",
-        "ALTER SYSTEM SET max_parallel_workers_per_gather = '4';",
-        "ALTER SYSTEM SET max_parallel_workers = '8';",
-        "ALTER SYSTEM SET max_parallel_maintenance_workers = '4';",
-    ]
-
-    pgconf_dev8 = [
-        # WARNING
-        # this tool not being optimal
-        # for very high memory systems
-
-        # DB Version: 15
-        # OS Type: linux
-        # DB Type: dw
-        # Total Memory (RAM): 188 GB
-        # CPUs num: 80
-        # Connections num: 20
-        # Data Storage: ssd
-        "ALTER SYSTEM SET max_connections = '20';",
-        "ALTER SYSTEM SET shared_buffers = '47GB';",
-        "ALTER SYSTEM SET effective_cache_size = '141GB';",
-        "ALTER SYSTEM SET maintenance_work_mem = '2GB';",
-        "ALTER SYSTEM SET checkpoint_completion_target = '0.9';",
-        "ALTER SYSTEM SET wal_buffers = '16MB';",
-        "ALTER SYSTEM SET default_statistics_target = '500';",
-        "ALTER SYSTEM SET random_page_cost = '1.1';",
-        "ALTER SYSTEM SET effective_io_concurrency = '200';",
-        "ALTER SYSTEM SET work_mem = '30801kB';",
-        "ALTER SYSTEM SET min_wal_size = '4GB';",
-        "ALTER SYSTEM SET max_wal_size = '16GB';",
-        "ALTER SYSTEM SET max_worker_processes = '80';",
-        "ALTER SYSTEM SET max_parallel_workers_per_gather = '40';",
-        "ALTER SYSTEM SET max_parallel_workers = '80';",
-        "ALTER SYSTEM SET max_parallel_maintenance_workers = '4';",
-    ]
     engine = create_engine(Config.TRAINER_PG_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
     with engine.connect() as conn:
-        for sql in pgconf_dev8:
+        for sql in Config.PGTUNE_STATEMENTS:
             _exec(conn, sql)
+
+
+def exists(dataset):
+    # TODO(WAN): this is just a convenient hack based on testing the last thing that load does.
+    engine = create_engine(Config.TRAINER_PG_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
+    with engine.connect() as conn:
+        if dataset == "tpch":
+            res = conn.execute(text("SELECT * FROM pg_indexes WHERE indexname = 'l_sk_pk'")).fetchall()
+            return len(res) > 0
+        else:
+            raise RuntimeError(f"{dataset=} not supported.")
+
+
+def load_if_not_exists(dataset):
+    if exists(dataset):
+        pass
+    else:
+        load(dataset)
 
 
 def load(dataset):
@@ -105,7 +64,6 @@ def load(dataset):
 
 
 def load_tpch():
-    tpch_sf = Path("/tpch_sf10").absolute()
     engine = create_engine(Config.TRAINER_PG_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
     with engine.connect() as conn:
         tables = ["region", "nation", "part", "supplier", "partsupp", "customer", "orders", "lineitem"]
@@ -116,7 +74,7 @@ def load_tpch():
         for table in tables:
             _exec(conn, f"TRUNCATE {table} CASCADE")
         for table in tables:
-            table_path = tpch_sf / f"{table}.tbl"
+            table_path = Config.TPCH_DATA / f"{table}.tbl"
             _exec(conn, f"COPY {table} FROM '{str(table_path)}' CSV DELIMITER '|'")
         with open(Path("/tpch_schema") / "tpch_constraints.sql") as f:
             contents = "".join([line for line in f if not line.startswith("--") and not len(line.strip()) == 0])
@@ -155,7 +113,7 @@ def prepare():
     prewarm_all()
 
 
-def gym(name, workloads, seed=15721):
+def gym(name, workloads, seed=15721, overwrite=False):
     # Run the queries in the gym.
     engine = create_engine(Config.TRAINER_PG_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
     # TODO(WAN): assumes read-only.
@@ -165,144 +123,322 @@ def gym(name, workloads, seed=15721):
         db_snapshot.to_file(db_snapshot_path)
     db_snapshot = DatabaseSnapshot.from_file(db_snapshot_path)
 
-    action_space = FakeIndexSpace(1)
-    observation_space = QPPNetFeatures(db_snapshot=db_snapshot, seed=seed)
-
-    # noinspection PyTypeChecker
-    env: DbGymEnv = gymnasium.make(
-        "dbgym/DbGym-v0",
-        # disable_env_checker=True,
-        action_space=action_space,
-        observation_space=observation_space,
-        connstr=Config.TRAINER_PG_URI,
-        workloads=workloads,
-        seed=seed,
-    )
-
-    obs_path = Path(f"/dbgym/{name}/obs/").absolute()
+    obs_path = Config.SAVE_PATH_OBSERVATION / name
     obs_path.mkdir(parents=True, exist_ok=True)
     obs_iter = 0
+    pq_path = obs_path / f"{obs_iter}.parquet"
 
-    observation, info = env.reset(seed=15721)
-    df = observation_space.convert_observations_to_df(observation)
-    df.to_parquet(obs_path / f"{obs_iter}.parquet")
-    obs_iter += 1
+    if overwrite or not pq_path.exists():
+        action_space = FakeIndexSpace(1)
+        observation_space = QPPNetFeatures(db_snapshot=db_snapshot, seed=seed)
 
-    # TODO(WAN): eventually...
-    # for _ in range(1000):
-    #     action = env.action_space.sample()
-    #     observation, reward, terminated, truncated, info = env.step(action)
-    #     train_df = observation_space.convert_observations_to_df(observation)
-    #     train_df.to_parquet(obs_path / f"{obs_iter}.parquet")
-    #     obs_iter += 1
-    #
-    #     if terminated or truncated:
-    #         observation, info = env.reset()
-    env.close()
+        # noinspection PyTypeChecker
+        env: DbGymEnv = gymnasium.make(
+            "dbgym/DbGym-v0",
+            disable_env_checker=True,
+            name=name,
+            action_space=action_space,
+            observation_space=observation_space,
+            connstr=Config.TRAINER_PG_URI,
+            workloads=workloads,
+            seed=seed,
+        )
+
+        observation, info = env.reset(seed=15721)
+        df = observation_space.convert_observations_to_df(observation)
+
+        pd.Series({"Runtime (s)": df["Actual Total Time (us)"].sum() / 1e6}).to_pickle(
+            Config.SAVE_PATH_OBSERVATION / name / "runtime.pkl"
+        )
+
+        df.to_parquet(pq_path)
+        obs_iter += 1
+
+        # TODO(WAN): eventually, tuning. Will need to change the pq_path.exists() check above.
+        # for _ in range(1000):
+        #     action = env.action_space.sample()
+        #     observation, reward, terminated, truncated, info = env.step(action)
+        #     train_df = observation_space.convert_observations_to_df(observation)
+        #     train_df.to_parquet(obs_path / f"{obs_iter}.parquet")
+        #     obs_iter += 1
+        #
+        #     if terminated or truncated:
+        #         observation, info = env.reset()
+        env.close()
 
 
-def hack_tablesample_tpch(workload: WorkloadTPCH):
+def hack_tablesample_tpch(workload: WorkloadTPCH) -> Workload:
     result = copy.deepcopy(workload)
-    hack_nation = ["nation n1", "nation n2"]
-    hack_lineitem = ["lineitem l1", "lineitem l2", "lineitem l3"]
-    tables = ["region", "nation", "part", "supplier", "partsupp", "customer", "orders", "lineitem"]
 
-    for i, query in enumerate(result.queries):
-        query = query.replace("select\n\tnation", "select\n\tNATION")
-        query = query.replace("group by\n\tnation", "group by\n\tNATION")
-        query = query.replace("order by\n\tnation", "order by\n\tNATION")
-        query = query.replace("n_name as nation", "n_name as NATION")
-        query = query.replace("as c_orders", "as C_ORDERS")
-        # This appears to be a bug in the PostgreSQL optimizer, TPC-H Q20 samplescan suffers.
-        query = query.replace("from\n\t\t\t\t\tlineitem", "from\n\t\t\t\t\tLINEITEM")
-        query = query.replace("lineitem l3", "LINEITEM l3")
-
-        old_query = query
-        for table in hack_nation:
-            query = query.replace(f"{table} ", f"{table} TABLESAMPLE BERNOULLI (10) REPEATABLE (15721) ")
-            query = query.replace(f"{table},", f"{table} TABLESAMPLE BERNOULLI (10) REPEATABLE (15721),")
-            query = query.replace(f"{table}\n", f"{table} TABLESAMPLE BERNOULLI (10) REPEATABLE (15721)\n")
-        skip_nation = old_query != query
-
-        old_query = query
-        for table in hack_lineitem:
-            query = query.replace(f"{table} ", f"{table} TABLESAMPLE BERNOULLI (10) REPEATABLE (15721) ")
-            query = query.replace(f"{table},", f"{table} TABLESAMPLE BERNOULLI (10) REPEATABLE (15721),")
-            query = query.replace(f"{table}\n", f"{table} TABLESAMPLE BERNOULLI (10) REPEATABLE (15721)\n")
-        skip_lineitem = old_query != query
-
-        for table in tables:
-            if table == "nation" and skip_nation:
-                continue
-            if table == "lineitem" and skip_lineitem:
-                continue
-            query = query.replace(f"{table} ", f"{table} TABLESAMPLE BERNOULLI (10) REPEATABLE (15721) ")
-            query = query.replace(f"{table},", f"{table} TABLESAMPLE BERNOULLI (10) REPEATABLE (15721),")
-            query = query.replace(f"{table}\n", f"{table} TABLESAMPLE BERNOULLI (10) REPEATABLE (15721)\n")
-
-        query = query.replace("LINEITEM", "lineitem")
-        query = query.replace("NATION", "nation")
-        query = query.replace("as C_ORDERS", "as c_orders")
-        result.queries[i] = query
+    # TODO(WAN):
+    #  I really hate this code. TABLESAMPLE only at root-level to try to limit the perf impact caused by PostgreSQL
+    #  having a poor optimizer.
+    sample_method = "BERNOULLI (10)"
+    sample_seed = "REPEATABLE (15721)"
+    for i, query in enumerate(result.queries, 1):
+        if i == 1:
+            query = query.replace("\n\tlineitem", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 2:
+            query = query.replace("\n\tpart,", f"\n\tpart TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tsupplier,", f"\n\tsupplier TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tpartsupp,", f"\n\tpartsupp TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tnation,", f"\n\tnation TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tregion", f"\n\tregion TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 3:
+            query = query.replace("\n\tcustomer,", f"\n\tcustomer TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\torders,", f"\n\torders TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tlineitem", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 4:
+            query = query.replace("\n\torders", f"\n\torders TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 5:
+            query = query.replace("\n\tcustomer,", f"\n\tcustomer TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\torders,", f"\n\torders TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tlineitem,", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tsupplier,", f"\n\tsupplier TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tnation,", f"\n\tnation TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tregion", f"\n\tregion TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 6:
+            query = query.replace("\n\tlineitem", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 7:
+            query = query.replace("\n\t\t\tsupplier,", f"\n\t\t\tsupplier TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tlineitem,", f"\n\t\t\tlineitem TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\torders,", f"\n\t\t\torders TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tcustomer,", f"\n\t\t\tcustomer TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tnation n1,", f"\n\t\t\tnation n1 TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tnation n2", f"\n\t\t\tnation n2 TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 8:
+            query = query.replace("\n\t\t\tpart,", f"\n\t\t\tpart TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tsupplier,", f"\n\t\t\tsupplier TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tlineitem,", f"\n\t\t\tlineitem TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\torders,", f"\n\t\t\torders TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tcustomer,", f"\n\t\t\tcustomer TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tnation n1,", f"\n\t\t\tnation n1 TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tnation n2,", f"\n\t\t\tnation n2 TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tregion", f"\n\t\t\tregion TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 9:
+            query = query.replace("\n\t\t\tpart,", f"\n\t\t\tpart TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tsupplier,", f"\n\t\t\tsupplier TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tlineitem,", f"\n\t\t\tlineitem TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tpartsupp,", f"\n\t\t\tpartsupp TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\torders,", f"\n\t\t\torders TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\t\t\tnation", f"\n\t\t\tnation TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 10:
+            query = query.replace("\n\tcustomer,", f"\n\tcustomer TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\torders,", f"\n\torders TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tlineitem,", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tnation", f"\n\tnation TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 11:
+            query = query.replace("\n\tpartsupp,", f"\n\tpartsupp TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tsupplier,", f"\n\tsupplier TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tnation", f"\n\tnation TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 12:
+            query = query.replace("\n\torders,", f"\n\torders TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tlineitem", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 13:
+            query = query.replace(
+                "\n\t\t\tcustomer left outer join orders",
+                f"\n\t\t\tcustomer TABLESAMPLE {sample_method} {sample_seed} left outer join orders TABLESAMPLE {sample_method} {sample_seed}",
+            )
+        elif i == 14:
+            query = query.replace("\n\tlineitem,", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tpart", f"\n\tpart TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 15:
+            query = query.replace("\n\t\tlineitem", f"\n\t\tlineitem TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 15 + 1:
+            query = query.replace("\n\tsupplier,", f"\n\tsupplier TABLESAMPLE {sample_method} {sample_seed},")
+        elif i == 15 + 2:
+            pass
+        elif i == 16 + 2:
+            query = query.replace("\n\tpartsupp,", f"\n\tPARTSUPP TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tpart", f"\n\tpart TABLESAMPLE {sample_method} {sample_seed}")
+            query = query.replace("PARTSUPP", "partsupp")
+        elif i == 17 + 2:
+            query = query.replace("\n\tlineitem,", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tpart", f"\n\tpart TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 18 + 2:
+            query = query.replace("\n\tcustomer,", f"\n\tcustomer TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\torders,", f"\n\torders TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tlineitem", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 19 + 2:
+            query = query.replace("\n\tlineitem,", f"\n\tlineitem TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tpart", f"\n\tpart TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 20 + 2:
+            query = query.replace("\n\tsupplier,", f"\n\tsupplier TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tnation", f"\n\tnation TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 21 + 2:
+            query = query.replace("\n\tsupplier,", f"\n\tsupplier TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tlineitem l1,", f"\n\tlineitem l1 TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\torders,", f"\n\torders TABLESAMPLE {sample_method} {sample_seed},")
+            query = query.replace("\n\tnation", f"\n\tnation TABLESAMPLE {sample_method} {sample_seed}")
+        elif i == 22 + 2:
+            query = query.replace("\n\t\t\tcustomer", f"\n\t\t\tcustomer TABLESAMPLE {sample_method} {sample_seed}")
+        result.queries[i - 1] = query
     return result
 
 
-def main():
-    workload_seed_start, workload_seed_end = 15721, 16720
+class AutogluonModel:
+    def __init__(self, save_path: Path):
+        self.save_path: Path = save_path
+        self.predictor: TabularPredictor = TabularPredictor(label="Actual Total Time (us)", path=str(self.save_path))
+
+    def try_load(self) -> bool:
+        try:
+            self.predictor.load(str(self.save_path))
+            # TODO(WAN): leak of autogluon impl details, but sometimes fit doesn't save?
+            return self.predictor._learner.is_fit
+        except FileNotFoundError:
+            return False
+
+    def train(self, dataset: TabularDataset, time_limit=Config.AUTOGLUON_TIME_LIMIT_S):
+        self.predictor.fit(dataset, time_limit=time_limit)
+        pd.Series({"Training Time (s)": time_limit}).to_pickle(self.save_path / "training_time.pkl")
+        self.predictor.save()
+
+    def eval(self, dataset: TabularDataset) -> pd.DataFrame:
+        y_pred = self.predictor.predict(dataset)
+        eval_df = pd.concat([y_pred, dataset["Actual Total Time (us)"]], axis=1)
+        eval_df.columns = ["Predicted Latency (us)", "Actual Latency (us)"]
+        eval_df["diff (us)"] = (eval_df["Predicted Latency (us)"] - eval_df["Actual Latency (us)"]).abs()
+        eval_df["q_err"] = np.nan_to_num(
+            np.maximum(
+                eval_df["Predicted Latency (us)"] / eval_df["Actual Latency (us)"],
+                eval_df["Actual Latency (us)"] / eval_df["Predicted Latency (us)"],
+            ),
+            nan=np.inf,
+        )
+        return eval_df
+
+    @staticmethod
+    def make_padded_datasets(dfs: list[pd.DataFrame]) -> list[TabularDataset]:
+        result = []
+        max_lens = {}
+        for df in dfs:
+            for col in ["Children Observation Indexes", "Features", "Query Hash"]:
+                max_lens[col] = max([len(x) for x in df[col].tolist()])
+        for df in dfs:
+            flatteneds = []
+            for col in ["Children Observation Indexes", "Features", "Query Hash"]:
+                col_df = pd.DataFrame(df[col].tolist(), index=df.index)
+                col_df = col_df.rename(columns=lambda num: f"{col}_{num}")
+                for i in range(len(col_df.columns), max_lens[col] + 1):
+                    col_df[f"{col}_{i}"] = pd.NA
+                flatteneds.append(col_df)
+            for col in ["Node Type", "Observation Index", "Query Num", "Actual Total Time (us)"]:
+                flatteneds.append(df[col])
+            result.append(TabularDataset(pd.concat(flatteneds, axis=1)))
+        return result
+
+
+def generate_data():
+    workload_seed_start, workload_seed_end = Config.WORKLOAD_SEED_START, Config.WORKLOAD_SEED_END
     workloads = [WorkloadTPCH(seed) for seed in range(workload_seed_start, workload_seed_end + 1)]
-    train_workloads, test_workloads = train_test_split(workloads, test_size=0.2)
-    tablesample_workloads = [hack_tablesample_tpch(workload) for workload in train_workloads]
+    default_workloads, test_workloads = train_test_split(workloads, test_size=0.2)
+    tablesample_workloads = [hack_tablesample_tpch(workload) for workload in default_workloads]
 
     seed = 15721
     with PostgresTrainer(Config.TRAINER_URL) as trainer:
         assert trainer.dbms_exists(), "Startup failed?"
         pgtune()
         trainer.dbms_restart()
-        load("tpch")
+        load_if_not_exists("tpch")
         prepare()
         gym("test", test_workloads, seed=seed)
-        gym("train", train_workloads, seed=seed)
+        gym("default", default_workloads, seed=seed)
         gym("tablesample", tablesample_workloads, seed=seed)
 
-    def flatten(df):
-        flatteneds = []
-        for col in ["Children Observation Indexes", "Features", "Query Hash"]:
-            col_df = pd.DataFrame(df[col].tolist(), index=df.index)
-            col_df = col_df.rename(columns=lambda num: f"{col}_{num}")
-            flatteneds.append(col_df)
-        for col in ["Node Type", "Observation Index", "Query Num", "Actual Total Time (us)"]:
-            flatteneds.append(df[col])
-        return pd.concat(flatteneds, axis=1)
 
-    test_df = pd.read_parquet("/dbgym/test/obs/0.parquet")
-    train_df = pd.read_parquet("/dbgym/train/obs/0.parquet")
-    tablesample_df = pd.read_parquet("/dbgym/tablesample/obs/0.parquet")
-    test_data = TabularDataset(flatten(test_df))
-    train_data = TabularDataset(flatten(train_df))
-    tablesample_data = TabularDataset(flatten(tablesample_df))
-    save_path = "/dbgym/models/autogluon/"
-    # noinspection PyUnreachableCode
-    if True:
-        predictor = TabularPredictor(label="Actual Total Time (us)", path=save_path).fit(train_data, time_limit=30)
-    else:
-        predictor = TabularPredictor.load(save_path)
-    y_pred = predictor.predict(test_data)
-    eval_df = pd.concat([y_pred, test_data["Actual Total Time (us)"]], axis=1)
-    eval_df.columns = ["Predicted Latency (us)", "Actual Latency (us)"]
-    metrics_df = eval_df.copy()
-    metrics_df["diff (us)"] = (metrics_df["Predicted Latency (us)"] - metrics_df["Actual Latency (us)"]).abs()
-    metrics_df["q_err"] = np.nan_to_num(
-        np.maximum(
-            metrics_df["Predicted Latency (us)"] / metrics_df["Actual Latency (us)"],
-            metrics_df["Actual Latency (us)"] / metrics_df["Predicted Latency (us)"]
-        ),
-        nan=np.inf
+def generate_model():
+    test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
+    default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+    tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
+
+    data_dfs = []
+    data_dfs.append(test_df)
+    data_dfs.append(default_df)
+    data_dfs.append(tablesample_df)
+
+    autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
+    test_data = autogluon_dfs[0]
+    default_data = autogluon_dfs[1]
+    tablesample_data = autogluon_dfs[2]
+
+    def save_model_eval(_expt_name: str, _df: pd.DataFrame, _train_data: TabularDataset, _test_data: TabularDataset):
+        if (Config.SAVE_PATH_EVAL / _expt_name).exists():
+            return
+
+        expt_autogluon = AutogluonModel(Config.SAVE_PATH_MODEL / _expt_name)
+        if not expt_autogluon.try_load():
+            expt_autogluon.train(_train_data)
+
+        (Config.SAVE_PATH_EVAL / _expt_name).mkdir(parents=True, exist_ok=True)
+        accuracy = expt_autogluon.eval(_test_data)
+        accuracy.to_parquet(Config.SAVE_PATH_EVAL / _expt_name / "accuracy.parquet")
+
+    save_model_eval("default", default_df, default_data, test_data)
+    save_model_eval("tablesample", tablesample_df, tablesample_data, test_data)
+
+
+def generate_plot():
+    def load_model_eval(_expt_name: str) -> pd.DataFrame:
+        return pd.read_parquet(Config.SAVE_PATH_EVAL / _expt_name)
+
+    def read_runtime(_expt_name: str) -> float:
+        return pd.read_pickle(Config.SAVE_PATH_OBSERVATION / _expt_name / "runtime.pkl")["Runtime (s)"]
+
+    def read_training_time(_expt_name: str) -> float:
+        return pd.read_pickle(Config.SAVE_PATH_MODEL / _expt_name / "training_time.pkl")["Training Time (s)"]
+
+    labeled_expt = [
+        # (code name, plot name)
+        ("default", "Default"),
+        ("tablesample", "Sample"),
+        (None, "VerdictDB"),
+        (None, "QPE"),
+        (None, "TSkip"),
+    ]
+
+    mae_s = []
+    runtime_s = []
+    training_time_s = []
+    index = []
+    for expt_name, index_name in labeled_expt:
+        if expt_name is None:
+            # TODO(WAN): temporary hack until we get those working.
+            mae_s.append(0)
+            runtime_s.append(0)
+            training_time_s.append(0)
+        else:
+            metrics = load_model_eval(expt_name)
+            mae_s.append(metrics["diff (us)"].mean() / 1e6)
+            runtime_s.append(read_runtime(expt_name))
+            training_time_s.append(read_training_time(expt_name))
+        index.append(index_name)
+
+    Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots()
+    df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
+    df.plot.bar(ax=ax, rot=45)
+    fig.savefig(Config.SAVE_PATH_PLOT / f"accuracy.pdf")
+    plt.close(fig)
+
+    fig, ax = plt.subplots()
+    df = pd.DataFrame(
+        {
+            "Runtime (s)": runtime_s,
+            "Training Time (s)": training_time_s,
+        },
+        index=index,
     )
-    print(metrics_df["diff (us)"].describe())
-    print(metrics_df["q_err"].describe())
-    print()
+    df.plot.bar(stacked=True, ax=ax, rot=45)
+    fig.savefig(Config.SAVE_PATH_PLOT / f"runtime.pdf")
+    plt.close(fig)
+
+
+def main():
+    generate_data()
+    generate_model()
+    generate_plot()
 
 
 if __name__ == "__main__":
     main()
-

@@ -1,5 +1,8 @@
 FROM --platform=${BUILDPLATFORM} python:3.9
 
+ENV http_proxy=${BEHIND_PDL_PROXY:+http://proxy.pdl.cmu.edu:3128/}
+ENV https_proxy=${BEHIND_PDL_PROXY:+http://proxy.pdl.cmu.edu:3128/}
+
 WORKDIR /app
 
 # Add the trainer user.
@@ -36,5 +39,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV PATH="${PATH}:/home/trainer/.local/bin"
 
 COPY --chown=trainer:trainer . /app
+
+ENV no_proxy=${BEHIND_PDL_PROXY:+${NO_PROXY_LIST}}
 
 CMD ["gunicorn", "trainer.wsgi:app"]

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from sqlalchemy.engine import Engine
-from sqlalchemy import inspect, text
-
 import pickle
+from typing import TypedDict
+
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Engine
 
 Stats = TypedDict("Stats", {"min": float, "median": float, "max": float})
 Column = TypedDict("Column", {"name": str, "stats": Stats}, total=False)
@@ -43,7 +43,7 @@ class DatabaseSnapshot:
                 # We're not tuning this.
                 continue
             schemas[schema_name]: Tables = {}
-            for (table_name, fkcs) in inspector.get_sorted_table_and_fkc_names(schema_name):
+            for table_name, fkcs in inspector.get_sorted_table_and_fkc_names(schema_name):
                 if table_name is None:
                     # The last iteration consists of FKs that would require a separate CREATE statement.
                     continue
@@ -71,7 +71,7 @@ class DatabaseSnapshot:
                 attr_stats = engine.connect().execute(text(query)).fetchall()
                 assert len(attr_stats) == 1, f"Something weird has happened, check the query: {query}"
                 attr_stats = attr_stats[0]
-                attr_stats = [attr_stats[i: i + 3] for i in range(0, len(attr_stats), 3)]
+                attr_stats = [attr_stats[i : i + 3] for i in range(0, len(attr_stats), 3)]
                 attr_stats = {column_name: attr_stat for column_name, attr_stat in zip(column_names, attr_stats)}
                 for column in table_attr["columns"]:
                     column_name = column["name"]

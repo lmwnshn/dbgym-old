@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 echo "Creating volume 'tpch_queries'."
-docker volume rm tpch_queries
 
 set -euxo pipefail
 
@@ -33,10 +32,6 @@ set -x
 cd "${ROOT_DIR}"
 
 docker run --volume=tpch_queries:/tpch_queries --name tpch_queries busybox true
-set +x
-for seed in $(seq ${TPCH_SEED_START} ${TPCH_SEED_END}); do
-  docker cp "./build/tpch-kit/dbgen/generated_queries/${seed}" tpch_queries:/tpch_queries
-done
-set -x
+docker cp "./build/tpch-kit/dbgen/generated_queries/." tpch_queries:/tpch_queries
 docker rm tpch_queries
 

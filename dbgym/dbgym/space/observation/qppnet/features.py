@@ -5,9 +5,9 @@ from typing import Any, Optional
 import numpy as np
 import pandas as pd
 from dbgym.space.observation.base import BaseFeatureSpace
+from dbgym.state.database_snapshot import DatabaseSnapshot
 from gymnasium import spaces
 from sklearn.preprocessing import MinMaxScaler
-from dbgym.state.database_snapshot import DatabaseSnapshot
 
 
 class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
@@ -80,9 +80,9 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
     _partial_modes = ["invalid", "Simple", "Partial", "Finalize"]
 
     def __init__(
-            self,
-            db_snapshot: DatabaseSnapshot,
-            seed: int = 15721,
+        self,
+        db_snapshot: DatabaseSnapshot,
+        seed: int = 15721,
     ):
         assert len(db_snapshot.snapshot["schemas"]) == 1, "No support for multiple schemas."
         self._db_snapshot = db_snapshot

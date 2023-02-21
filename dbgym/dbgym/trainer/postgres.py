@@ -7,8 +7,17 @@ class PostgresTrainer(BaseTrainer):
         if not self.dbms_exists():
             self.dbms_bootstrap()
             self.dbms_init()
-        self.dbms_stop()
-        self.dbms_start()
+        isready_retcode = self.dbms_isready()
+        if isready_retcode == 0:
+            # Ready.
+            pass
+        elif isready_retcode == 1:
+            # Starting up, wait.
+            self.dbms_isready_blocking()
+        elif isready_retcode == 2:
+            # Not responding, force stop and start again.
+            self.dbms_stop()
+            self.dbms_start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -16,6 +25,12 @@ class PostgresTrainer(BaseTrainer):
 
     def dbms_exists(self):
         return requests.post(self._service_url + "/postgres/exists/").json()["initialized"]
+
+    def dbms_isready(self):
+        return requests.post(self._service_url + "/postgres/pg_isready/").json()["retcode"]
+
+    def dbms_isready_blocking(self):
+        requests.post(self._service_url + "/postgres/pg_isready_blocking/")
 
     def dbms_bootstrap(self):
         requests.post(self._service_url + "/postgres/clone/")

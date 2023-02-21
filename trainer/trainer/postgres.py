@@ -64,6 +64,27 @@ def exists():
     return {"initialized": get_pg_data_dir().exists()}
 
 
+@postgres.route("/pg_isready/", methods=["POST"])
+def pg_isready():
+    db_port = int(os.getenv("TRAINER_PG_PORT"))
+    command = local[get_pg_bin_dir() / "pg_isready"]["-p", db_port]
+    result = run_command(command, expected_retcodes=[0, 1, 2])
+    return result
+
+
+@postgres.route("/pg_isready_blocking/", methods=["POST"])
+def pg_isready_blocking():
+    db_port = int(os.getenv("TRAINER_PG_PORT"))
+    command = local[get_pg_bin_dir() / "pg_isready"]["-p", db_port]
+    while True:
+        result = run_command(command, expected_retcodes=[0, 1, 2])
+        if result["retcode"] == 0:
+            break
+        else:
+            time.sleep(1)
+    return result
+
+
 @postgres.route("/clone/", methods=["POST"])
 def clone():
     gh_user = "lmwnshn"

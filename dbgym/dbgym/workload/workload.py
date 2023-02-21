@@ -1,6 +1,7 @@
 from abc import ABC
-import pglast
 from pathlib import Path
+
+import pglast
 
 
 class Workload(ABC):

@@ -3,17 +3,18 @@ from typing import Optional, Tuple
 import gymnasium
 import numpy as np
 from dbgym.space.observation.base import BaseFeatureSpace
+from dbgym.space.observation.qppnet.features import QPPNetFeatures
+from dbgym.workload.workload import Workload
 from gymnasium.core import ActType, ObsType
 from gymnasium.spaces import Space
 from sqlalchemy import NullPool, create_engine, text
-from dbgym.space.observation.qppnet.features import QPPNetFeatures
-from dbgym.workload.workload import Workload
-
 from tqdm import tqdm
+
 
 class DbGymEnv(gymnasium.Env):
     def __init__(
         self,
+        name: str,
         action_space: Space,
         observation_space: Space,
         workloads: list[Workload],
@@ -22,6 +23,7 @@ class DbGymEnv(gymnasium.Env):
     ):
         self._rng = np.random.default_rng(seed=seed)
 
+        self.name = name
         self.action_space = action_space
         self.observation_space = observation_space
         self.workloads = workloads
@@ -59,11 +61,11 @@ class DbGymEnv(gymnasium.Env):
 
         engine = create_engine(self.connstr, poolclass=NullPool)
         with engine.connect() as conn:
-            for workload in tqdm(self.workloads, desc="Iterating over workloads.", leave=None):
-                for sql_text in tqdm(workload.queries, desc="Running queries in workload.", leave=None):
+            for workload in tqdm(self.workloads, desc=f"{self.name}: Iterating over workloads.", leave=None):
+                for sql_text in tqdm(workload.queries, desc=f"{self.name}: Running queries in workload.", leave=None):
                     query_num += 1
                     # TODO(WAN): hack!!
-                    can_prefix = (sql_text.strip().lower().split()[0] in ["delete", "insert", "select", "update"])
+                    can_prefix = sql_text.strip().lower().split()[0] in ["delete", "insert", "select", "update"]
                     if can_prefix:
                         sql = text(self.observation_space.SQL_PREFIX + sql_text)
                     else:

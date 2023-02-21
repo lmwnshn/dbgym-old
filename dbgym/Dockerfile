@@ -1,5 +1,8 @@
 FROM --platform=${BUILDPLATFORM} python:3.9
 
+ENV http_proxy=${BEHIND_PDL_PROXY:+http://proxy.pdl.cmu.edu:3128/}
+ENV https_proxy=${BEHIND_PDL_PROXY:+http://proxy.pdl.cmu.edu:3128/}
+
 WORKDIR /app
 
 # Add the dbgym user.
@@ -11,9 +14,13 @@ RUN \
     apt-get update \
     && apt-get install -y \
       htop \
+      sudo \
       tmux \
       vim \
     && apt-get clean
+
+RUN usermod -aG sudo dbgym \
+    && echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 RUN mkdir -p /dbgym
 RUN chown -R dbgym:dbgym /app && chown -R dbgym:dbgym /dbgym
@@ -27,5 +34,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV PATH="${PATH}:/home/dbgym/.local/bin"
 
 COPY --chown=dbgym:dbgym . /app
+
+ENV no_proxy=${BEHIND_PDL_PROXY:+${NO_PROXY_LIST}}
 
 CMD ["python3", "-u", "-m", "dbgym"]

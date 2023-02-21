@@ -54,6 +54,7 @@ services:
     depends_on:
       - "trainer"
     environment:
+      HOSTNAME: "${HOSTNAME}"
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
       GYM_DB_USER: "${GYM_DB_USER}"

@@ -1,10 +1,8 @@
 from flask import Flask
+from sqlalchemy import text
 
 from monitor.config import Config
-from monitor.extensions import db
-from monitor.extensions import scheduler
-
-from sqlalchemy import text
+from monitor.extensions import db, scheduler
 
 
 def run_sql(sql):
