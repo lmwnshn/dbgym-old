@@ -31,7 +31,7 @@ USER trainer
 
 COPY --chown=trainer:trainer requirements.txt /app
 # Install Python packages.
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN --mount=type=cache,mode=0755,target=/root/.cache/pip \
     pip3 install -r requirements.txt
 ENV PATH="${PATH}:/home/trainer/.local/bin"
 
