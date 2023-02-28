@@ -1,8 +1,5 @@
 FROM --platform=${BUILDPLATFORM} python:3.9
 
-ENV http_proxy=${HTTP_PROXY}
-ENV https_proxy=${HTTPS_PROXY}
-
 WORKDIR /app
 
 # Add the dbgym user.
@@ -34,7 +31,5 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV PATH="${PATH}:/home/dbgym/.local/bin"
 
 COPY --chown=dbgym:dbgym . /app
-
-ENV no_proxy=${NO_PROXY}
 
 CMD ["python3", "-u", "-m", "dbgym"]

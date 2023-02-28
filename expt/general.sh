@@ -16,12 +16,9 @@ fi
 
 if [[ ${IS_DEV_MACHINE} -eq 1 ]]; then
   export DOCKER_DATA_ROOT="/mnt/nvme0n1/docker"
-  export HTTP_PROXY="http://proxy.pdl.cmu.edu:3128/"
-  export HTTPS_PROXY="http://proxy.pdl.cmu.edu:3128/"
 else
   export DOCKER_DATA_ROOT="/var/lib/docker"
 fi
-export NO_PROXY="localhost,127.0.0.1,0.0.0.0,gym_db,monitor,trainer,dbgym"
 export HOSTNAME=$(hostname)
 
 sudo apt install make gcc
@@ -32,8 +29,9 @@ sudo apt install make gcc
 
 docker compose down --remove-orphans
 docker compose build
-docker compose up --detach --wait
-docker compose run --build dbgym
+
+docker compose --profile gym build
+docker compose --profile gym up
 
 docker compose down --remove-orphans
 

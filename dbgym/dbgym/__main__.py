@@ -113,16 +113,10 @@ def prepare():
     prewarm_all()
 
 
-def gym(name, workloads, seed=15721, overwrite=False):
-    # Run the queries in the gym.
-    engine = create_engine(Config.TRAINER_PG_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
-    # TODO(WAN): assumes read-only.
-    db_snapshot_path = Path("/dbgym/snapshot.pkl").absolute()
-    if not db_snapshot_path.exists():
-        db_snapshot = DatabaseSnapshot(engine)
-        db_snapshot.to_file(db_snapshot_path)
+def gym(name, db_snapshot_path, workloads, seed=15721, overwrite=True):
     db_snapshot = DatabaseSnapshot.from_file(db_snapshot_path)
 
+    # Run the queries in the gym.
     obs_path = Config.SAVE_PATH_OBSERVATION / name
     obs_path.mkdir(parents=True, exist_ok=True)
     obs_iter = 0
@@ -142,6 +136,7 @@ def gym(name, workloads, seed=15721, overwrite=False):
             connstr=Config.TRAINER_PG_URI,
             workloads=workloads,
             seed=seed,
+            setup_sqls=["create extension if not exists nyoom"],
         )
 
         observation, info = env.reset(seed=15721)
@@ -173,6 +168,10 @@ def hack_tablesample_tpch(workload: WorkloadTPCH) -> Workload:
     # TODO(WAN):
     #  I really hate this code. TABLESAMPLE only at root-level to try to limit the perf impact caused by PostgreSQL
     #  having a poor optimizer.
+
+    # TODO(WAN): try this
+    # sample_method = "BERNOULLI (1)"
+
     sample_method = "BERNOULLI (10)"
     sample_seed = "REPEATABLE (15721)"
     for i, query in enumerate(result.queries, 1):
@@ -336,15 +335,35 @@ def generate_data():
     tablesample_workloads = [hack_tablesample_tpch(workload) for workload in default_workloads]
 
     seed = 15721
-    with PostgresTrainer(Config.TRAINER_URL) as trainer:
+    with PostgresTrainer(Config.TRAINER_URL, force_rebuild=False) as trainer:
         assert trainer.dbms_exists(), "Startup failed?"
+        trainer.dbms_install_nyoom()
         pgtune()
         trainer.dbms_restart()
         load_if_not_exists("tpch")
         prepare()
-        gym("test", test_workloads, seed=seed)
-        gym("default", default_workloads, seed=seed)
-        gym("tablesample", tablesample_workloads, seed=seed)
+
+        engine = create_engine(Config.TRAINER_PG_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
+        # TODO(WAN): assumes read-only.
+        db_snapshot_path = Path("/dbgym/snapshot.pkl").absolute()
+        if not db_snapshot_path.exists():
+            print("Snapshot: generating.")
+            db_snapshot = DatabaseSnapshot(engine)
+            db_snapshot.to_file(db_snapshot_path)
+            print("Snapshot: complete.")
+
+        # TODO(WAN): :(
+        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
+        with engine.connect() as conn:
+            conn.execute(text("update nyoom_signal set run = TRUE"))
+
+        gym("test", db_snapshot_path, test_workloads, seed=seed)
+        gym("default", db_snapshot_path, default_workloads, seed=seed)
+        gym("tablesample", db_snapshot_path, tablesample_workloads, seed=seed)
+
+        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, execution_options={"isolation_level": "AUTOCOMMIT"})
+        with engine.connect() as conn:
+            conn.execute(text("update nyoom_signal set run = FALSE"))
 
 
 def generate_model():

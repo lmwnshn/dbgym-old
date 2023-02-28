@@ -7,7 +7,7 @@ from dbgym.space.observation.qppnet.features import QPPNetFeatures
 from dbgym.workload.workload import Workload
 from gymnasium.core import ActType, ObsType
 from gymnasium.spaces import Space
-from sqlalchemy import NullPool, create_engine, text
+from sqlalchemy import StaticPool, create_engine, text
 from tqdm import tqdm
 
 
@@ -20,6 +20,7 @@ class DbGymEnv(gymnasium.Env):
         workloads: list[Workload],
         connstr: str,
         seed=15721,
+        setup_sqls : list[str]=None,
     ):
         self._rng = np.random.default_rng(seed=seed)
 
@@ -28,6 +29,9 @@ class DbGymEnv(gymnasium.Env):
         self.observation_space = observation_space
         self.workloads = workloads
         self.connstr = connstr
+        self.seed = seed
+        self.setup_sqls = setup_sqls
+        self._engine = create_engine(self.connstr, poolclass=StaticPool)
 
     def reset(
         self,
@@ -36,6 +40,8 @@ class DbGymEnv(gymnasium.Env):
         options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
         # Reset the RNG.
+        if seed is None:
+            seed = self.seed
         self._rng = np.random.default_rng(seed=seed)
         self.action_space.seed(seed)
         self.observation_space.seed(seed)
@@ -59,8 +65,9 @@ class DbGymEnv(gymnasium.Env):
         query_num = 0
         obs_idx = 0
 
-        engine = create_engine(self.connstr, poolclass=NullPool)
-        with engine.connect() as conn:
+        with self._engine.connect() as conn:
+            for sql in self.setup_sqls:
+                conn.execute(text(sql))
             for workload in tqdm(self.workloads, desc=f"{self.name}: Iterating over workloads.", leave=None):
                 for sql_text in tqdm(workload.queries, desc=f"{self.name}: Running queries in workload.", leave=None):
                     query_num += 1

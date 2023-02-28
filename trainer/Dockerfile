@@ -1,8 +1,5 @@
 FROM --platform=${BUILDPLATFORM} python:3.9
 
-ENV http_proxy=${HTTP_PROXY}
-ENV https_proxy=${HTTPS_PROXY}
-
 WORKDIR /app
 
 # Add the trainer user.
@@ -39,7 +36,5 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV PATH="${PATH}:/home/trainer/.local/bin"
 
 COPY --chown=trainer:trainer . /app
-
-ENV no_proxy=${NO_PROXY}
 
 CMD ["gunicorn", "trainer.wsgi:app"]

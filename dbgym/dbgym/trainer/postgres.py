@@ -4,7 +4,7 @@ from dbgym.trainer.base import BaseTrainer
 
 class PostgresTrainer(BaseTrainer):
     def __enter__(self):
-        if not self.dbms_exists():
+        if self.force_rebuild or not self.dbms_exists():
             self.dbms_bootstrap()
             self.dbms_init()
         isready_retcode = self.dbms_isready()
@@ -49,3 +49,7 @@ class PostgresTrainer(BaseTrainer):
     def dbms_restart(self):
         self.dbms_stop()
         self.dbms_start()
+
+    def dbms_install_nyoom(self):
+        requests.post(self._service_url + "/postgres/nyoom/")
+        self.dbms_restart()

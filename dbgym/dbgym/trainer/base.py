@@ -4,8 +4,9 @@ import requests
 
 
 class BaseTrainer(ABC):
-    def __init__(self, service_url: str):
+    def __init__(self, service_url: str, force_rebuild=False):
         self._service_url = service_url
+        self.force_rebuild = force_rebuild
         self.dirty = False
 
     def dbms_bootstrap(self):

@@ -2,13 +2,13 @@ services:
   gym_db:
     container_name: "dbgym-gym_db"
     environment:
-      HTTP_PROXY: "${HTTP_PROXY}"
-      HTTPS_PROXY: "${HTTPS_PROXY}"
-      NO_PROXY: "${NO_PROXY}"
       POSTGRES_DB: "${GYM_DB_NAME}"
       POSTGRES_PASSWORD: "${GYM_DB_PASS}"
       POSTGRES_USER: "${GYM_DB_USER}"
+    ports:
+      - "5432:5432"
     image: "postgres:15"
+    shm_size: "48gb"
     volumes:
       - "gym_db:/var/lib/postgresql/data"
 
@@ -19,9 +19,6 @@ services:
     depends_on:
       - "gym_db"
     environment:
-      HTTP_PROXY: "${HTTP_PROXY}"
-      HTTPS_PROXY: "${HTTPS_PROXY}"
-      NO_PROXY: "${NO_PROXY}"
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
       GYM_DB_USER: "${GYM_DB_USER}"
@@ -46,15 +43,30 @@ services:
     depends_on:
       - "trainer"
     environment:
-      HTTP_PROXY: "${HTTP_PROXY}"
-      HTTPS_PROXY: "${HTTPS_PROXY}"
-      NO_PROXY: "${NO_PROXY}"
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
       GYM_DB_USER: "${GYM_DB_USER}"
       MONITOR_PORT: "${MONITOR_PORT}"
     ports:
       - "${MONITOR_PORT}:${MONITOR_PORT}"
+
+  nyoom:
+    build:
+      context: "nyoom"
+    container_name: "dbgym-nyoom"
+    depends_on:
+      - "monitor"
+    environment:
+      GYM_DB_NAME: "${GYM_DB_NAME}"
+      GYM_DB_PASS: "${GYM_DB_PASS}"
+      GYM_DB_USER: "${GYM_DB_USER}"
+      TRAINER_PG_NAME: "${TRAINER_PG_NAME}"
+      TRAINER_PG_PASS: "${TRAINER_PG_PASS}"
+      TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
+      TRAINER_PG_USER: "${TRAINER_PG_USER}"
+      MONITOR_PORT: "${MONITOR_PORT}"
+    profiles:
+        - "gym"
 
   dbgym:
     build:
@@ -63,9 +75,6 @@ services:
     depends_on:
       - "trainer"
     environment:
-      HTTP_PROXY: "${HTTP_PROXY}"
-      HTTPS_PROXY: "${HTTPS_PROXY}"
-      NO_PROXY: "${NO_PROXY}"
       HOSTNAME: "${HOSTNAME}"
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
@@ -81,17 +90,6 @@ services:
       - "tpch_schema:/tpch_schema"
     profiles:
       - "gym"
-
-#  nyoom:
-#    build:
-#      context: "nyoom"
-#    container_name: "dbgym-nyoom"
-#    depends_on:
-#      - "monitor"
-#    environment:
-#      GYM_DB_NAME: "${GYM_DB_NAME}"
-#      GYM_DB_PASS: "${GYM_DB_PASS}"
-#      GYM_DB_USER: "${GYM_DB_USER}"
 
 volumes:
   dbgym: {}

@@ -1,8 +1,5 @@
 FROM --platform=${BUILDPLATFORM} python:3.9
 
-ENV http_proxy=${HTTP_PROXY}
-ENV https_proxy=${HTTPS_PROXY}
-
 WORKDIR /app
 
 # Add the monitor user.
@@ -19,7 +16,5 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ENV PATH="${PATH}:/home/monitor/.local/bin"
 
 COPY --chown=monitor:monitor . /app
-
-ENV no_proxy=${NO_PROXY}
 
 CMD ["gunicorn", "monitor.wsgi:app"]

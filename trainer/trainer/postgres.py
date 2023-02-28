@@ -59,6 +59,10 @@ def get_pg_data_dir() -> Path:
     return (get_pg_bin_dir() / "pgdata").absolute()
 
 
+def get_nyoom_dir() -> Path:
+    return (get_pg_dir() / "cmudb" / "extensions" / "nyoom").absolute()
+
+
 @postgres.route("/exists/", methods=["POST"])
 def exists():
     return {"initialized": get_pg_data_dir().exists()}
@@ -233,3 +237,22 @@ def stop():
         while (get_pg_data_dir() / "postmaster.pid").exists():
             time.sleep(1)
     return result
+
+
+@postgres.route("/nyoom/", methods=["POST"])
+def nyoom():
+    db_port = int(os.getenv("TRAINER_PG_PORT"))
+
+    result = {}
+    with tmp_cwd(get_nyoom_dir()):
+        command = local["make"]["install", "-j"]
+        result["make"] = run_command(command)
+
+    psql = local[get_pg_bin_dir() / "psql"]
+    psql_args = ["postgres", "-p", db_port, "-c", "ALTER SYSTEM SET shared_preload_libraries = 'nyoom'"]
+    command = psql[psql_args]
+    result["shared_preload_libraries"] = run_command(command)
+
+    # TODO(WAN): should restart, but we already will restart for pgtune so...
+    return result
+
