@@ -28,10 +28,8 @@ sudo apt install make gcc
 ./setup/tpch/tpch_queries.sh
 
 docker compose down --remove-orphans
-docker compose build
-
-docker compose --profile gym build
-docker compose --profile gym up
+docker compose --profile gym --profile nyoom build
+docker compose --profile gym --profile nyoom up
 
 docker compose down --remove-orphans
 

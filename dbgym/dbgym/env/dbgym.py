@@ -7,7 +7,7 @@ from dbgym.space.observation.qppnet.features import QPPNetFeatures
 from dbgym.workload.workload import Workload
 from gymnasium.core import ActType, ObsType
 from gymnasium.spaces import Space
-from sqlalchemy import StaticPool, create_engine, text
+from sqlalchemy import NullPool, create_engine, text
 from tqdm import tqdm
 
 
@@ -31,7 +31,7 @@ class DbGymEnv(gymnasium.Env):
         self.connstr = connstr
         self.seed = seed
         self.setup_sqls = setup_sqls
-        self._engine = create_engine(self.connstr, poolclass=StaticPool)
+        self._engine = create_engine(self.connstr, poolclass=NullPool)
 
     def reset(
         self,
@@ -78,6 +78,7 @@ class DbGymEnv(gymnasium.Env):
                     else:
                         sql = text(sql_text)
                     results = conn.execute(sql)
+                    assert (results.returns_rows if can_prefix else True), f"What happened? SQL: {sql}"
                     if results.returns_rows:
                         results = results.fetchall()
                         if can_prefix and isinstance(self.observation_space, QPPNetFeatures):

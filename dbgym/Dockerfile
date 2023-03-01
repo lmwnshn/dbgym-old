@@ -19,17 +19,17 @@ RUN \
 RUN usermod -aG sudo dbgym \
     && echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-RUN mkdir -p /dbgym
-RUN chown -R dbgym:dbgym /app && chown -R dbgym:dbgym /dbgym
+RUN chown -R dbgym:dbgym /app
 
 USER dbgym
 
 COPY --chown=dbgym:dbgym requirements.txt /app
 # Install Python packages.
-RUN --mount=type=cache,mode=0755,target=/root/.cache/pip \
+RUN --mount=type=cache,mode=0755,target=/home/dbgym/.cache/pip \
     pip3 install -r requirements.txt
 ENV PATH="${PATH}:/home/dbgym/.local/bin"
 
 COPY --chown=dbgym:dbgym . /app
 
-CMD ["python3", "-u", "-m", "dbgym"]
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]

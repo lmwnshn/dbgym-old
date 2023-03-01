@@ -11,10 +11,11 @@ USER monitor
 
 COPY --chown=monitor:monitor requirements.txt /app
 # Install Python packages.
-RUN --mount=type=cache,mode=0755,target=/root/.cache/pip \
+RUN --mount=type=cache,mode=0755,target=/home/monitor/.cache/pip \
     pip3 install -r requirements.txt
 ENV PATH="${PATH}:/home/monitor/.local/bin"
 
 COPY --chown=monitor:monitor . /app
 
-CMD ["gunicorn", "monitor.wsgi:app"]
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]

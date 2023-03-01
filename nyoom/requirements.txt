@@ -1,0 +1,6 @@
+networkx
+pandas
+psycopg[binary,pool]
+pygraphviz
+requests
+sqlalchemy
