@@ -3,6 +3,7 @@
 #  Bring back the [historical, future] workload split if we're trying to do forecasting.
 import copy
 import os
+import time
 from pathlib import Path
 
 import gymnasium
@@ -364,15 +365,37 @@ def generate_data():
             db_snapshot.to_file(db_snapshot_path)
             print("Snapshot: complete.")
 
+        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
+                               execution_options={"isolation_level": "AUTOCOMMIT"})
+        with engine.connect() as conn:
+            conn.execute(text("CREATE TABLE IF NOT EXISTS gym_plugins (name text)"))
+            conn.execute(text("TRUNCATE gym_plugins"))
+        engine.dispose()
+
         # TODO(WAN): :(
         gym("test", db_snapshot_path, test_workloads, seed=seed, overwrite=False)
         gym("default", db_snapshot_path, default_workloads, seed=seed, overwrite=False)
         gym("tablesample", db_snapshot_path, tablesample_workloads, seed=seed, overwrite=False)
 
+        plugin = "nyoom"
         engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
                                execution_options={"isolation_level": "AUTOCOMMIT"})
         with engine.connect() as conn:
-            conn.execute(text("update nyoom_signal set run = TRUE"))
+            while True:
+                print(f"Checking for plugin: {plugin}")
+                results = conn.execute(text(f"SELECT * FROM gym_plugins WHERE name = '{plugin}'")).scalar_one_or_none()
+                if results is None:
+                    print(f"Waiting for plugin: {plugin}")
+                    time.sleep(5)
+                else:
+                    print(f"Found plugin: {plugin}")
+                    break
+        engine.dispose()
+
+        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
+                               execution_options={"isolation_level": "AUTOCOMMIT"})
+        with engine.connect() as conn:
+            conn.execute(text("UPDATE nyoom_signal SET run = TRUE"))
         engine.dispose()
 
         gym("default_with_nyoom", db_snapshot_path, default_workloads, seed=seed, overwrite=True)
@@ -380,7 +403,7 @@ def generate_data():
         engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
                                execution_options={"isolation_level": "AUTOCOMMIT"})
         with engine.connect() as conn:
-            conn.execute(text("update nyoom_signal set run = FALSE"))
+            conn.execute(text("UPDATE nyoom_signal SET run = FALSE"))
         engine.dispose()
 
 

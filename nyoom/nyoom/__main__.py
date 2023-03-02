@@ -11,20 +11,36 @@ def main():
     gym_engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
                                execution_options={"isolation_level": "AUTOCOMMIT"})
     with gym_engine.connect() as gym_conn:
+        # TODO(WAN): Fix this hack. Need to microservice this too.
+        print("Hack: sleep for 30s.")
+        time.sleep(30)
+
         setup_sqls = [
             "DROP TABLE IF EXISTS nyoom_results",
             "CREATE TABLE IF NOT EXISTS nyoom_results (id serial, ts timestamp, pid int, token int, plan text)",
             "DROP TABLE IF EXISTS nyoom_signal",
             "CREATE TABLE IF NOT EXISTS nyoom_signal (run boolean)",
             "INSERT INTO nyoom_signal VALUES (FALSE)",
+            "INSERT INTO gym_plugins VALUES ('nyoom')"
         ]
 
-        for sql in setup_sqls:
-            gym_conn.execute(text(sql))
+        installed = False
+        while not installed:
+            try:
+                print("Installing nyoom.")
+                for sql in setup_sqls:
+                    gym_conn.execute(text(sql))
+                installed = True
+                print("Installed nyoom.")
+            except SQLAlchemyError as e:
+                print(e)
+                print("Install failed, trying again.")
 
         while True:
+            print("Checking for signal.")
             result = gym_conn.execute(text("SELECT run FROM nyoom_signal")).fetchone()
             if result[0]:
+                print("Signal received. TODO(WAN): note that we cannot stop nyoom right now.")
                 try:
                     trainer_engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
                                                    execution_options={"isolation_level": "AUTOCOMMIT"})

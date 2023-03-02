@@ -55,7 +55,8 @@ services:
       context: "nyoom"
     container_name: "dbgym-nyoom"
     depends_on:
-      - "monitor"
+      - "gym_db"
+      - "trainer"
     environment:
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
