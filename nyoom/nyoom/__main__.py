@@ -29,6 +29,7 @@ def main():
         trainer_engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
                                        execution_options={"isolation_level": "AUTOCOMMIT"})
         with trainer_engine.connect() as trainer_conn:
+            print("Building relname_reltuples_map.")
             relname_reltuples_map_sql = text(
                 "SELECT nspname AS schemaname, relname, reltuples "
                 "FROM pg_class C LEFT JOIN pg_namespace N ON (C.relnamespace = N.oid) "
@@ -41,6 +42,7 @@ def main():
                 assert schemaname == "public"
                 relname_reltuples_map[relname] = reltuples
 
+            print("Building indexname_tablename_map.")
             indexname_tablename_map_sql = text("SELECT indexname, tablename FROM pg_indexes")
             results = trainer_conn.execute(indexname_tablename_map_sql)
             for row in results:
