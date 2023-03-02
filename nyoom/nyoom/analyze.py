@@ -14,6 +14,12 @@ class Analyze:
         self._dict = self._build_dict(self._json)
         self._pipelines = self._compute_pipelines()
         self._drivers = self._compute_drivers()
+        self._bounds = {
+            plan_node_id: {"min": 0, "max": float("inf")}
+            for plan_node_id in self._dict
+        }
+
+    def compute_bounds(self):
         self._bounds = self._compute_bounds()
 
     def _get_node(self, plan_node_id):

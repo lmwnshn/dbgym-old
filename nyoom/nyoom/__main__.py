@@ -71,14 +71,24 @@ def main():
                                 indexname, tablename = row
                                 indexname_tablename_map[indexname] = tablename
 
+                            print("Analyzing: ", [pid for _, pid, _, _ in nyoom_results])
                             for ts, pid, token, plan in nyoom_results:
                                 analyze = Analyze(relname_reltuples_map, indexname_tablename_map, plan)
-                                victim_plan_node_ids = analyze.get_victims(cutoff_pct=10, min_processed=0)
-                                if len(victim_plan_node_ids) > 0:
-                                    analyze.viz(f"/nyoom/{pid}-{ts}.png")
+                                try:
+                                    analyze.compute_bounds()
+                                except Exception as e:
+                                    filename = f"/nyoom/{pid}-{ts}.png"
+                                    analyze.viz(filename)
+                                    print(e)
+                                    print(f"Error computing bounds, see: {filename}\n")
+
+                                cutoff_pct = 10
+                                min_processed = 0
+                                victim_plan_node_ids = analyze.get_victims(cutoff_pct=cutoff_pct, min_processed=min_processed)
+                                print(f"Stopping {pid=} {token=} [{cutoff_pct=}, {min_processed=}]: ",
+                                      victim_plan_node_ids)
                                 for plan_node_id in victim_plan_node_ids:
                                     zw_sql = text(f"SELECT * FROM nyoom_enqueue_zw({pid}, {token}, {plan_node_id})")
-                                    print("Sending: ", zw_sql)
                                     trainer_conn.execute(zw_sql)
                             time.sleep(1)
                 except SQLAlchemyError as e:

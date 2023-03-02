@@ -365,7 +365,9 @@ def generate_data():
             print("Snapshot: complete.")
 
         # TODO(WAN): :(
-        gym("test", db_snapshot_path, test_workloads, seed=seed)
+        gym("test", db_snapshot_path, test_workloads, seed=seed, overwrite=False)
+        gym("default", db_snapshot_path, default_workloads, seed=seed, overwrite=False)
+        gym("tablesample", db_snapshot_path, tablesample_workloads, seed=seed, overwrite=False)
 
         engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
                                execution_options={"isolation_level": "AUTOCOMMIT"})
@@ -373,8 +375,7 @@ def generate_data():
             conn.execute(text("update nyoom_signal set run = TRUE"))
         engine.dispose()
 
-        gym("default_with_nyoom", db_snapshot_path, default_workloads, seed=seed)
-        # gym("tablesample", db_snapshot_path, tablesample_workloads, seed=seed)
+        gym("default_with_nyoom", db_snapshot_path, default_workloads, seed=seed, overwrite=True)
 
         engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
                                execution_options={"isolation_level": "AUTOCOMMIT"})
@@ -387,16 +388,19 @@ def generate_model():
     test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
     default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
     tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
+    default_with_nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
 
     data_dfs = []
     data_dfs.append(test_df)
     data_dfs.append(default_df)
     data_dfs.append(tablesample_df)
+    data_dfs.append(default_with_nyoom_df)
 
     autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
     test_data = autogluon_dfs[0]
     default_data = autogluon_dfs[1]
     tablesample_data = autogluon_dfs[2]
+    default_with_nyoom_data = autogluon_dfs[3]
 
     def save_model_eval(_expt_name: str, _df: pd.DataFrame, _train_data: TabularDataset, _test_data: TabularDataset):
         if (Config.SAVE_PATH_EVAL / _expt_name).exists():
@@ -412,6 +416,7 @@ def generate_model():
 
     save_model_eval("default", default_df, default_data, test_data)
     save_model_eval("tablesample", tablesample_df, tablesample_data, test_data)
+    save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data)
 
 
 def generate_plot():
@@ -431,6 +436,7 @@ def generate_plot():
         (None, "VerdictDB"),
         (None, "QPE"),
         (None, "TSkip"),
+        ("default_with_nyoom", "Nyoom"),
     ]
 
     mae_s = []
