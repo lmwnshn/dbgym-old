@@ -35,6 +35,7 @@ def main():
             except SQLAlchemyError as e:
                 print(e)
                 print("Install failed, trying again.")
+                time.sleep(5)
 
         while True:
             print("Checking for signal.")
