@@ -392,6 +392,12 @@ def generate_data():
                     break
         engine.dispose()
 
+        engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
+                               execution_options={"isolation_level": "AUTOCOMMIT"})
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS nyoom"))
+        engine.dispose()
+
         engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
                                execution_options={"isolation_level": "AUTOCOMMIT"})
         with engine.connect() as conn:
