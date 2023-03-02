@@ -95,7 +95,7 @@ def main():
                             # results_df = pd.read_sql_table("nyoom_results", gym_conn)
                             # TODO(WAN): pd.read_sql and pd.read_sql_table is cursed for some reason.
 
-                            print("Analyzing: ", [pid for _, pid, _, _ in nyoom_results])
+                            # print("Analyzing: ", [pid for _, pid, _, _ in nyoom_results])
                             for ts, pid, token, plan in nyoom_results:
                                 analyze = Analyze(relname_reltuples_map, indexname_tablename_map, plan)
                                 try:
@@ -109,12 +109,12 @@ def main():
                                 cutoff_pct = 10
                                 min_processed = 1000
                                 victim_plan_node_ids = analyze.get_victims(cutoff_pct=cutoff_pct, min_processed=min_processed)
-                                print(f"Stopping {pid=} {token=} [{cutoff_pct=}, {min_processed=}]: ",
-                                      victim_plan_node_ids)
+                                # print(f"Stopping {pid=} {token=} [{cutoff_pct=}, {min_processed=}]: ",
+                                #       victim_plan_node_ids)
                                 for plan_node_id in victim_plan_node_ids:
                                     zw_sql = text(f"SELECT * FROM nyoom_enqueue_zw({pid}, {token}, {plan_node_id})")
                                     trainer_conn.execute(zw_sql)
-                            time.sleep(5)
+                            time.sleep(1)
                 except SQLAlchemyError as e:
                     print(e)
                     pass
