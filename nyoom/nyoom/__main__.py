@@ -12,8 +12,8 @@ def main():
                                execution_options={"isolation_level": "AUTOCOMMIT"})
     with gym_engine.connect() as gym_conn:
         # TODO(WAN): Fix this hack. Need to microservice this too.
-        print("Hack: sleep for 30s.")
-        time.sleep(30)
+        print("Hack: sleep for 65s.")
+        time.sleep(65)
 
         setup_sqls = [
             "DROP TABLE IF EXISTS nyoom_results",
@@ -23,6 +23,30 @@ def main():
             "INSERT INTO nyoom_signal VALUES (FALSE)",
             "INSERT INTO gym_plugins VALUES ('nyoom')"
         ]
+
+        relname_reltuples_map = {}
+        indexname_tablename_map = {}
+        trainer_engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
+                                       execution_options={"isolation_level": "AUTOCOMMIT"})
+        with trainer_engine.connect() as trainer_conn:
+            relname_reltuples_map_sql = text(
+                "SELECT nspname AS schemaname, relname, reltuples "
+                "FROM pg_class C LEFT JOIN pg_namespace N ON (C.relnamespace = N.oid) "
+                "WHERE nspname NOT IN ('pg_catalog', 'information_schema') AND relkind = 'r' "
+                "ORDER BY reltuples DESC"
+            )
+            results = trainer_conn.execute(relname_reltuples_map_sql)
+            for row in results:
+                schemaname, relname, reltuples = row
+                assert schemaname == "public"
+                relname_reltuples_map[relname] = reltuples
+
+            indexname_tablename_map_sql = text("SELECT indexname, tablename FROM pg_indexes")
+            results = trainer_conn.execute(indexname_tablename_map_sql)
+            for row in results:
+                indexname, tablename = row
+                indexname_tablename_map[indexname] = tablename
+        trainer_engine.dispose()
 
         installed = False
         while not installed:
@@ -45,6 +69,7 @@ def main():
                 try:
                     trainer_engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
                                                    execution_options={"isolation_level": "AUTOCOMMIT"})
+
                     while True:
                         with trainer_engine.connect() as trainer_conn:
                             trainer_conn.execute(text("CREATE EXTENSION IF NOT EXISTS nyoom"))
@@ -67,26 +92,6 @@ def main():
                             # # TODO(WAN): don't need to read the result since we just obtained it.
                             # results_df = pd.read_sql_table("nyoom_results", gym_conn)
                             # TODO(WAN): pd.read_sql and pd.read_sql_table is cursed for some reason.
-
-                            relname_reltuples_map_sql = text(
-                                "SELECT nspname AS schemaname, relname, reltuples "
-                                "FROM pg_class C LEFT JOIN pg_namespace N ON (C.relnamespace = N.oid) "
-                                "WHERE nspname NOT IN ('pg_catalog', 'information_schema') AND relkind = 'r' "
-                                "ORDER BY reltuples DESC"
-                            )
-                            results = trainer_conn.execute(relname_reltuples_map_sql)
-                            relname_reltuples_map = {}
-                            for row in results:
-                                schemaname, relname, reltuples = row
-                                assert schemaname == "public"
-                                relname_reltuples_map[relname] = reltuples
-
-                            indexname_tablename_map_sql = text("SELECT indexname, tablename FROM pg_indexes")
-                            results = trainer_conn.execute(indexname_tablename_map_sql)
-                            indexname_tablename_map = {}
-                            for row in results:
-                                indexname, tablename = row
-                                indexname_tablename_map[indexname] = tablename
 
                             print("Analyzing: ", [pid for _, pid, _, _ in nyoom_results])
                             for ts, pid, token, plan in nyoom_results:
