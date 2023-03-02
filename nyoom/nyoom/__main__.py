@@ -107,14 +107,14 @@ def main():
                                     print(f"Error computing bounds, see: {filename}\n")
 
                                 cutoff_pct = 10
-                                min_processed = 0
+                                min_processed = 1000
                                 victim_plan_node_ids = analyze.get_victims(cutoff_pct=cutoff_pct, min_processed=min_processed)
                                 print(f"Stopping {pid=} {token=} [{cutoff_pct=}, {min_processed=}]: ",
                                       victim_plan_node_ids)
                                 for plan_node_id in victim_plan_node_ids:
                                     zw_sql = text(f"SELECT * FROM nyoom_enqueue_zw({pid}, {token}, {plan_node_id})")
                                     trainer_conn.execute(zw_sql)
-                            time.sleep(1)
+                            time.sleep(5)
                 except SQLAlchemyError as e:
                     print(e)
                     pass
