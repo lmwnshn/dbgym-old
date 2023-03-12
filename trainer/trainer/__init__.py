@@ -10,7 +10,7 @@ def create_app(config=Config):
     app.config["TRAINER_DIR"].mkdir(parents=True, exist_ok=True)
     db.init_app(app)
 
-    from trainer.model.instance import Instance
+    from trainer.model.instance import TrainerInstance
 
     with app.app_context():
         db.create_all()

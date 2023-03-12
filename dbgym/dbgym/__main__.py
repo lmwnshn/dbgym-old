@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pglast
+import requests
 from autogluon.tabular import TabularDataset, TabularPredictor
 from dbgym.config import Config
 from dbgym.env.dbgym import DbGymEnv
@@ -20,7 +21,7 @@ from dbgym.state.database_snapshot import DatabaseSnapshot
 from dbgym.trainer.postgres import PostgresTrainer
 from dbgym.workload.workload import Workload, WorkloadTPCH
 from sklearn.model_selection import train_test_split
-from sqlalchemy import create_engine, inspect, text, NullPool
+from sqlalchemy import NullPool, create_engine, inspect, text
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.engine.reflection import Inspector
 
@@ -32,8 +33,9 @@ def _exec(conn: Connection, sql: str, verbose=True):
 
 
 def pgtune():
-    engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
-                           execution_options={"isolation_level": "AUTOCOMMIT"})
+    engine = create_engine(
+        Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+    )
     with engine.connect() as conn:
         for sql in Config.PGTUNE_STATEMENTS:
             _exec(conn, sql)
@@ -42,8 +44,9 @@ def pgtune():
 
 def exists(dataset):
     # TODO(WAN): this is just a convenient hack based on testing the last thing that load does.
-    engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
-                           execution_options={"isolation_level": "AUTOCOMMIT"})
+    engine = create_engine(
+        Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+    )
     with engine.connect() as conn:
         if dataset == "tpch":
             res = conn.execute(text("SELECT * FROM pg_indexes WHERE indexname = 'l_sk_pk'")).fetchall()
@@ -69,8 +72,9 @@ def load(dataset):
 
 
 def load_tpch():
-    engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
-                           execution_options={"isolation_level": "AUTOCOMMIT"})
+    engine = create_engine(
+        Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+    )
     with engine.connect() as conn:
         tables = ["region", "nation", "part", "supplier", "partsupp", "customer", "orders", "lineitem"]
         with open(Path("/tpch_schema") / "tpch_schema.sql") as f:
@@ -90,8 +94,9 @@ def load_tpch():
 
 
 def prewarm_all():
-    engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
-                           execution_options={"isolation_level": "AUTOCOMMIT"})
+    engine = create_engine(
+        Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+    )
     inspector: Inspector = inspect(engine)
     with engine.connect() as conn:
         _exec(conn, "CREATE EXTENSION IF NOT EXISTS pg_prewarm")
@@ -104,8 +109,9 @@ def prewarm_all():
 
 
 def vacuum_analyze_all():
-    engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
-                           execution_options={"isolation_level": "AUTOCOMMIT"})
+    engine = create_engine(
+        Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+    )
     inspector: Inspector = inspect(engine)
     with engine.connect() as conn:
         for table in inspector.get_table_names():
@@ -358,59 +364,32 @@ def generate_data():
         db_snapshot_path = Path("/dbgym/snapshot.pkl").absolute()
         if not db_snapshot_path.exists():
             print("Snapshot: generating.")
-            engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
-                                   execution_options={"isolation_level": "AUTOCOMMIT"})
+            engine = create_engine(
+                Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+            )
             db_snapshot = DatabaseSnapshot(engine)
             engine.dispose()
             db_snapshot.to_file(db_snapshot_path)
             print("Snapshot: complete.")
 
-        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
-                               execution_options={"isolation_level": "AUTOCOMMIT"})
-        with engine.connect() as conn:
-            conn.execute(text("CREATE TABLE IF NOT EXISTS gym_plugins (name text)"))
-            conn.execute(text("TRUNCATE gym_plugins"))
-        engine.dispose()
-
-        # TODO(WAN): :(
         gym("test", db_snapshot_path, test_workloads, seed=seed, overwrite=False)
         gym("default", db_snapshot_path, default_workloads, seed=seed, overwrite=False)
         gym("tablesample", db_snapshot_path, tablesample_workloads, seed=seed, overwrite=False)
 
-        plugin = "nyoom"
-        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
-                               execution_options={"isolation_level": "AUTOCOMMIT"})
-        with engine.connect() as conn:
-            while True:
-                print(f"Checking for plugin: {plugin}")
-                results = conn.execute(text(f"SELECT * FROM gym_plugins WHERE name = '{plugin}'")).scalar_one_or_none()
-                if results is None:
-                    print(f"Waiting for plugin: {plugin}")
-                    time.sleep(5)
-                else:
-                    print(f"Found plugin: {plugin}")
-                    break
-        engine.dispose()
-
-        engine = create_engine(Config.TRAINER_PG_URI, poolclass=NullPool,
-                               execution_options={"isolation_level": "AUTOCOMMIT"})
+        engine = create_engine(
+            Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+        )
         with engine.connect() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS nyoom"))
         engine.dispose()
 
-        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
-                               execution_options={"isolation_level": "AUTOCOMMIT"})
-        with engine.connect() as conn:
-            conn.execute(text("UPDATE nyoom_signal SET run = TRUE"))
-        engine.dispose()
-
+        req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
+        assert req.status_code == 200
+        print("nyoom_start: ", req.text)
         gym("default_with_nyoom", db_snapshot_path, default_workloads, seed=seed, overwrite=True)
-
-        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool,
-                               execution_options={"isolation_level": "AUTOCOMMIT"})
-        with engine.connect() as conn:
-            conn.execute(text("UPDATE nyoom_signal SET run = FALSE"))
-        engine.dispose()
+        req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
+        assert req.status_code == 200
+        print("nyoom_stop: ", req.text)
 
 
 def generate_model():
@@ -424,6 +403,8 @@ def generate_model():
     data_dfs.append(default_df)
     data_dfs.append(tablesample_df)
     data_dfs.append(default_with_nyoom_df)
+    for i, df in enumerate(data_dfs):
+        print("Data", i, df.shape)
 
     autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
     test_data = autogluon_dfs[0]

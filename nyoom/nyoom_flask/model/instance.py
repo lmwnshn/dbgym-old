@@ -1,14 +1,12 @@
 import sqlalchemy as sa
 
-from trainer.extensions import db
+from nyoom_flask.extensions import db
 
 
-class TrainerInstance(db.Model):
-    __tablename__ = "trainer_instance"
+class NyoomInstance(db.Model):
+    __tablename__ = "nyoom_instance"
 
     port = sa.Column(sa.Integer, primary_key=True)
-    db_type = sa.Column(sa.Text, nullable=False)
-    initialized = sa.Column(sa.Boolean, nullable=False)
     stdin_file = sa.Column(sa.Text, nullable=False)
     stdout_file = sa.Column(sa.Text, nullable=False)
     stderr_file = sa.Column(sa.Text, nullable=False)
@@ -18,8 +16,6 @@ class TrainerInstance(db.Model):
         return (
             f"<{self.__tablename__} "
             f"{self.port=} "
-            f"{self.db_type=} "
-            f"{self.initialized=} "
             f"{self.stdin_file=} "
             f"{self.stdout_file=} "
             f"{self.stderr_file=} "

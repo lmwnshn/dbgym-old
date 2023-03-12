@@ -36,7 +36,9 @@ RUN --mount=type=cache,mode=0755,target=/home/nyoom/.cache/pip \
     pip3 install -r requirements.txt
 ENV PATH="${PATH}:/home/nyoom/.local/bin"
 
-COPY --chown=nyoom:nyoom . /nyoom_default
+COPY --chown=nyoom:nyoom ./gunicorn.conf.py /app
+COPY --chown=nyoom:nyoom ./nyoom_flask /app/nyoom_flask
+COPY --chown=nyoom:nyoom ./nyoom /nyoom_default/nyoom
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]

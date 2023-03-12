@@ -11,6 +11,8 @@ trainer_pg_pass = os.getenv("TRAINER_PG_PASS")
 trainer_pg_port = os.getenv("TRAINER_PG_PORT")
 trainer_pg_user = os.getenv("TRAINER_PG_USER")
 
+nyoom_port = os.getenv("NYOOM_PORT")
+
 hostname = os.getenv("HOSTNAME")
 
 
@@ -20,6 +22,7 @@ class Config:
     TRAINER_PG_URI = (
         f"postgresql+psycopg://{trainer_pg_user}:{trainer_pg_pass}@trainer:{trainer_pg_port}/{trainer_pg_name}"
     )
+    NYOOM_URL = f"http://nyoom:{nyoom_port}"
 
     SAVE_PATH_BASE = Path("/dbgym/artifact/").absolute()
     SAVE_PATH_OBSERVATION = (SAVE_PATH_BASE / "observation").absolute()
@@ -64,8 +67,8 @@ if Config.HOSTNAME == "kapipad":
     ]
     Config.TPCH_DATA = Path("/tpch_sf1").absolute()
     Config.WORKLOAD_SEED_START = 15721
-    Config.WORKLOAD_SEED_END = 15730
-    Config.AUTOGLUON_TIME_LIMIT_S = 10
+    Config.WORKLOAD_SEED_END = 15820  # 15730
+    Config.AUTOGLUON_TIME_LIMIT_S = 300  # 10
 elif Config.HOSTNAME in ["dev8", "dev9"]:
     Config.PGTUNE_STATEMENTS = [
         # WARNING

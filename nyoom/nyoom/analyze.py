@@ -1,8 +1,9 @@
+import json
 import queue
+
 import networkx as nx
 from networkx.drawing.nx_agraph import to_agraph
 from networkx.relabel import relabel_nodes
-import json
 
 
 class Analyze:
@@ -14,10 +15,7 @@ class Analyze:
         self._dict = self._build_dict(self._json)
         self._pipelines = self._compute_pipelines()
         self._drivers = self._compute_drivers()
-        self._bounds = {
-            plan_node_id: {"min": 0, "max": float("inf")}
-            for plan_node_id in self._dict
-        }
+        self._bounds = {plan_node_id: {"min": 0, "max": float("inf")} for plan_node_id in self._dict}
 
     def compute_bounds(self):
         self._bounds = self._compute_bounds()
@@ -95,8 +93,13 @@ class Analyze:
                     elif parent_type == "Merge Join" and node["Parent Relationship"] == "Outer":
                         # > For a Merge-Join, the pipelines containing its children and the Merge Join
                         # > operator itself are union'ed to create a single pipeline.
-                        mergers.append((plan_node_id, parent_plan_node_id,
-                                        *self._get_node(parent_plan_node_id)["Children Plan Node Ids"]))
+                        mergers.append(
+                            (
+                                plan_node_id,
+                                parent_plan_node_id,
+                                *self._get_node(parent_plan_node_id)["Children Plan Node Ids"],
+                            )
+                        )
                     elif parent_type == "Nested Loop" and node["Parent Relationship"] == "Outer":
                         # > For a Nested Loops or Index Nested Loops Join operator,
                         # > the outer child, the join operator and its entire inner subtree
@@ -172,10 +175,7 @@ class Analyze:
         for leaf in leaves:
             workq.put(leaf)
 
-        bounds = {
-            plan_node_id: {"min": 0, "max": float("inf")}
-            for plan_node_id in self._dict
-        }
+        bounds = {plan_node_id: {"min": 0, "max": float("inf")} for plan_node_id in self._dict}
 
         while not workq.empty():
             plan_node_id = workq.get()
@@ -183,8 +183,14 @@ class Analyze:
                 node = self._dict[plan_node_id]
                 node_type = node["Node Type"]
 
-                if node_type in ["Bitmap Heap Scan", "Bitmap Index Scan", "Index Scan", "Index Only Scan",
-                                 "Sample Scan", "Seq Scan"]:
+                if node_type in [
+                    "Bitmap Heap Scan",
+                    "Bitmap Index Scan",
+                    "Index Scan",
+                    "Index Only Scan",
+                    "Sample Scan",
+                    "Seq Scan",
+                ]:
                     if node_type == "Bitmap Index Scan":
                         relname = self._indexname_tablename_map[node["Index Name"]]
                     else:
@@ -203,14 +209,16 @@ class Analyze:
                 elif node_type == "Aggregate":
                     child = self._get_only_child(plan_node_id)
                     bounds[plan_node_id]["min"] = max(1, node["Tuples Processed"])
-                    bounds[plan_node_id]["max"] = bounds[child["Plan Node Id"]]["max"] - max(1,
-                                                                                             node["Tuples Processed"])
+                    bounds[plan_node_id]["max"] = bounds[child["Plan Node Id"]]["max"] - max(
+                        1, node["Tuples Processed"]
+                    )
                 elif node_type in ["Hash Join", "Merge Join", "Nested Loop"]:
                     outer = self._get_node(self._get_child(plan_node_id, "Outer"))
                     inner = self._get_node(self._get_child(plan_node_id, "Inner"))
                     bounds[plan_node_id]["min"] = node["Tuples Processed"]
-                    bounds[plan_node_id]["max"] = (bounds[outer["Plan Node Id"]]["max"] - outer["Tuples Processed"]) * \
-                                                  bounds[inner["Plan Node Id"]]["max"] + node["Tuples Processed"]
+                    bounds[plan_node_id]["max"] = (
+                        bounds[outer["Plan Node Id"]]["max"] - outer["Tuples Processed"]
+                    ) * bounds[inner["Plan Node Id"]]["max"] + node["Tuples Processed"]
                 elif node_type in ["Hash"]:
                     child = self._get_only_child(plan_node_id)
                     bounds[plan_node_id]["min"] = node["Tuples Processed"]
@@ -237,8 +245,9 @@ class Analyze:
                         parent = self._get_node(node["Parent Plan Node Id"])
                         if parent["Node Type"] == "Nested Loop":
                             outer = self._get_node(self._get_child(parent["Plan Node Id"], "Outer"))
-                            bounds[plan_node_id]["max"] = bounds[outer["Plan Node Id"]]["max"] * \
-                                                          bounds[child["Plan Node Id"]]["max"]
+                            bounds[plan_node_id]["max"] = (
+                                bounds[outer["Plan Node Id"]]["max"] * bounds[child["Plan Node Id"]]["max"]
+                            )
 
                 parent_plan_node_id = node["Parent Plan Node Id"]
                 if parent_plan_node_id is None:
@@ -283,8 +292,9 @@ class Analyze:
         def _build(plan, parent):
             plan_node_id = plan["Plan Node Id"]
             result[plan_node_id] = {k: v for k, v in plan.items() if k != "Plans"}
-            result[plan_node_id]["Children Plan Node Ids"] = [child_plan["Plan Node Id"] for child_plan in
-                                                              plan.get("Plans", [])]
+            result[plan_node_id]["Children Plan Node Ids"] = [
+                child_plan["Plan Node Id"] for child_plan in plan.get("Plans", [])
+            ]
             result[plan_node_id]["Parent Plan Node Id"] = parent["Plan Node Id"] if parent is not None else None
             for child in plan.get("Plans", []):
                 _build(child, parent=plan)
@@ -308,15 +318,19 @@ class Analyze:
             str_pipeline = f"\nPipeline: {pipeline_id}\tDriver: {plan_node_id in self._drivers}"
             str_tuples = f"\nTuples: {tuples_processed} / {tuples_total_estimate} ({progress_estimate}%)"
             str_bounds = f"\nBounds: [{bounds_min}, {bounds_max}] ({bounds_progress_estimate}%)"
-            str_parent = "" if "Parent Relationship" not in node else f"\nParent Relationship: {node['Parent Relationship']}"
+            str_parent = (
+                "" if "Parent Relationship" not in node else f"\nParent Relationship: {node['Parent Relationship']}"
+            )
 
-            label = "".join([
-                str_node,
-                str_pipeline,
-                str_tuples,
-                str_bounds,
-                str_parent,
-            ])
+            label = "".join(
+                [
+                    str_node,
+                    str_pipeline,
+                    str_tuples,
+                    str_bounds,
+                    str_parent,
+                ]
+            )
             return label
 
         mapping = {plan_node_id: get_label(plan_node_id) for plan_node_id in self._graph.nodes}

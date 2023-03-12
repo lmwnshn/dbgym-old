@@ -20,7 +20,7 @@ class DbGymEnv(gymnasium.Env):
         workloads: list[Workload],
         connstr: str,
         seed=15721,
-        setup_sqls : list[str]=None,
+        setup_sqls: list[str] = None,
     ):
         self._rng = np.random.default_rng(seed=seed)
 
@@ -78,7 +78,7 @@ class DbGymEnv(gymnasium.Env):
                     else:
                         sql = text(sql_text)
                     results = conn.execute(sql)
-                    assert (results.returns_rows if can_prefix else True), f"What happened? SQL: {sql}"
+                    assert results.returns_rows if can_prefix else True, f"What happened? SQL: {sql}"
                     if results.returns_rows:
                         results = results.fetchall()
                         if can_prefix and isinstance(self.observation_space, QPPNetFeatures):

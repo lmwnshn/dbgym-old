@@ -1,5 +1,9 @@
+flask
+flask-sqlalchemy
+gunicorn
 networkx
 pandas
+plumbum
 psycopg[binary,pool]
 pygraphviz
 requests

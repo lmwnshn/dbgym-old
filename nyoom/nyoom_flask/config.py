@@ -13,7 +13,6 @@ trainer_pg_port = os.getenv("TRAINER_PG_PORT")
 trainer_pg_user = os.getenv("TRAINER_PG_USER")
 
 
-# TODO(WAN): This should become POST parameters.
 class Config:
     SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg://{gym_db_user}:{gym_db_pass}@gym_db/{gym_db_name}"
     MONITOR_URL = f"http://monitor:{monitor_port}"

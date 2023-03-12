@@ -12,7 +12,7 @@ from plumbum import local
 from plumbum.machines import LocalCommand
 
 from trainer.extensions import db
-from trainer.model.instance import Instance
+from trainer.model.instance import TrainerInstance
 
 postgres = Blueprint("postgres", __name__)
 
@@ -107,8 +107,8 @@ def clone():
     with tmp_cwd(get_trainer_dir()):
         local["rm"]["-rf", gh_repo].run()
         db_port = int(os.getenv("TRAINER_PG_PORT"))
-        query = db.select(Instance).where(Instance.port == db_port)
-        instance: Optional[Instance] = db.session.execute(query).scalar_one_or_none()
+        query = db.select(TrainerInstance).where(TrainerInstance.port == db_port)
+        instance: Optional[TrainerInstance] = db.session.execute(query).scalar_one_or_none()
         if instance is not None:
             db.session.delete(instance)
             db.session.commit()
@@ -157,8 +157,8 @@ def start():
     db_pass = os.getenv("TRAINER_PG_PASS")
     db_user = os.getenv("TRAINER_PG_USER")
 
-    query = db.select(Instance).where(Instance.port == db_port)
-    instance: Optional[Instance] = db.session.execute(query).scalar_one_or_none()
+    query = db.select(TrainerInstance).where(TrainerInstance.port == db_port)
+    instance: Optional[TrainerInstance] = db.session.execute(query).scalar_one_or_none()
 
     if instance is not None and instance.pid is not None:
         return {"message": f"Instance already exists: {instance}"}
@@ -207,7 +207,7 @@ def start():
         instance.initialized = True
         instance.pid = pid
     else:
-        instance = Instance(
+        instance = TrainerInstance(
             port=db_port,
             initialized=True,
             db_type="postgres",
@@ -225,12 +225,12 @@ def start():
 @postgres.route("/stop/", methods=["POST"])
 def stop():
     db_port = int(os.getenv("TRAINER_PG_PORT"))
-    query = db.select(Instance).where(Instance.port == db_port)
-    instance: Optional[Instance] = db.session.execute(query).scalar_one_or_none()
+    query = db.select(TrainerInstance).where(TrainerInstance.port == db_port)
+    instance: Optional[TrainerInstance] = db.session.execute(query).scalar_one_or_none()
     if instance is None or instance.pid is None:
         return {"message": f"No PID for {instance}"}
     command = local["kill"]["-INT", instance.pid]
-    result = run_command(command, expected_retcodes=[0, 1])
+    result = run_command(command, expected_retcodes=[-2, 0, 1])
     instance.pid = None
     db.session.commit()
     if result["retcode"] == 0:
@@ -255,4 +255,3 @@ def nyoom():
 
     # TODO(WAN): should restart, but we already will restart for pgtune so...
     return result
-

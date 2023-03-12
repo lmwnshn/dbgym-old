@@ -66,8 +66,9 @@ services:
       TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
       TRAINER_PG_USER: "${TRAINER_PG_USER}"
       MONITOR_PORT: "${MONITOR_PORT}"
-    profiles:
-        - "nyoom"
+      NYOOM_PORT: "${NYOOM_PORT}"
+    ports:
+      - "${NYOOM_PORT}:${NYOOM_PORT}"
     volumes:
       - "nyoom:/nyoom"
 
@@ -82,6 +83,7 @@ services:
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
       GYM_DB_USER: "${GYM_DB_USER}"
+      NYOOM_PORT: "${NYOOM_PORT}"
       TRAINER_PORT: "${TRAINER_PORT}"
       TRAINER_PG_NAME: "${TRAINER_PG_NAME}"
       TRAINER_PG_PASS: "${TRAINER_PG_PASS}"
