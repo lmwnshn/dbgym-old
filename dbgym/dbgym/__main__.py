@@ -490,8 +490,10 @@ class Plot:
         Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
         fig, ax = plt.subplots()
         df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
-        df.plot.bar(ax=ax)
-        fig.savefig(Config.SAVE_PATH_PLOT / f"sweep_tpch.pdf")
+        ax = df.plot.bar(ax=ax, rot=45, legend=False)
+        ax.set_xlabel("Percentage of Train Dataset Used")
+        ax.set_ylabel("Mean Absolute Error (s)")
+        fig.savefig(Config.SAVE_PATH_PLOT / f"sweep_tpch.pdf", bbox_inches="tight")
         plt.close(fig)
 
 
@@ -499,7 +501,7 @@ def main():
     # generate_data()
     # Model.generate_model()
     # Plot.generate_plot()
-    Model.generate_model_sweep_tpch()
+    # Model.generate_model_sweep_tpch()
     Plot.generate_plot_sweep_tpch()
 
 
