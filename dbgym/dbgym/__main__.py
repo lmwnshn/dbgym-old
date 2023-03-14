@@ -2,19 +2,17 @@
 #  Bring back all the scheduling and PREPARE stuff that made sense in an OLTP world.
 #  Bring back the [historical, future] workload split if we're trying to do forecasting.
 import copy
-import os
-import time
 from pathlib import Path
 
 import gymnasium
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import pglast
 import requests
-from autogluon.tabular import TabularDataset, TabularPredictor
+from autogluon.tabular import TabularDataset
 from dbgym.config import Config
 from dbgym.env.dbgym import DbGymEnv
+from dbgym.model.autogluon import AutogluonModel
 from dbgym.space.action.fake_index import FakeIndexSpace
 from dbgym.space.observation.qppnet.features import QPPNetFeatures
 from dbgym.state.database_snapshot import DatabaseSnapshot
@@ -292,59 +290,6 @@ def hack_tablesample_tpch(workload: WorkloadTPCH) -> Workload:
     return result
 
 
-class AutogluonModel:
-    def __init__(self, save_path: Path):
-        self.save_path: Path = save_path
-        self.predictor: TabularPredictor = TabularPredictor(label="Actual Total Time (us)", path=str(self.save_path))
-
-    def try_load(self) -> bool:
-        try:
-            self.predictor.load(str(self.save_path))
-            # TODO(WAN): leak of autogluon impl details, but sometimes fit doesn't save?
-            return self.predictor._learner.is_fit
-        except FileNotFoundError:
-            return False
-
-    def train(self, dataset: TabularDataset, time_limit=Config.AUTOGLUON_TIME_LIMIT_S):
-        self.predictor.fit(dataset, time_limit=time_limit)
-        pd.Series({"Training Time (s)": time_limit}).to_pickle(self.save_path / "training_time.pkl")
-        self.predictor.save()
-
-    def eval(self, dataset: TabularDataset) -> pd.DataFrame:
-        y_pred = self.predictor.predict(dataset)
-        eval_df = pd.concat([y_pred, dataset["Actual Total Time (us)"]], axis=1)
-        eval_df.columns = ["Predicted Latency (us)", "Actual Latency (us)"]
-        eval_df["diff (us)"] = (eval_df["Predicted Latency (us)"] - eval_df["Actual Latency (us)"]).abs()
-        eval_df["q_err"] = np.nan_to_num(
-            np.maximum(
-                eval_df["Predicted Latency (us)"] / eval_df["Actual Latency (us)"],
-                eval_df["Actual Latency (us)"] / eval_df["Predicted Latency (us)"],
-            ),
-            nan=np.inf,
-        )
-        return eval_df
-
-    @staticmethod
-    def make_padded_datasets(dfs: list[pd.DataFrame]) -> list[TabularDataset]:
-        result = []
-        max_lens = {}
-        for df in dfs:
-            for col in ["Children Observation Indexes", "Features", "Query Hash"]:
-                max_lens[col] = max([len(x) for x in df[col].tolist()])
-        for df in dfs:
-            flatteneds = []
-            for col in ["Children Observation Indexes", "Features", "Query Hash"]:
-                col_df = pd.DataFrame(df[col].tolist(), index=df.index)
-                col_df = col_df.rename(columns=lambda num: f"{col}_{num}")
-                for i in range(len(col_df.columns), max_lens[col] + 1):
-                    col_df[f"{col}_{i}"] = pd.NA
-                flatteneds.append(col_df)
-            for col in ["Node Type", "Observation Index", "Query Num", "Actual Total Time (us)"]:
-                flatteneds.append(df[col])
-            result.append(TabularDataset(pd.concat(flatteneds, axis=1)))
-        return result
-
-
 def generate_data():
     workload_seed_start, workload_seed_end = Config.WORKLOAD_SEED_START, Config.WORKLOAD_SEED_END
     workloads = [WorkloadTPCH(seed) for seed in range(workload_seed_start, workload_seed_end + 1)]
@@ -392,26 +337,8 @@ def generate_data():
         print("nyoom_stop: ", req.text)
 
 
-def generate_model():
-    test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
-    default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
-    tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
-    default_with_nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
-
-    data_dfs = []
-    data_dfs.append(test_df)
-    data_dfs.append(default_df)
-    data_dfs.append(tablesample_df)
-    data_dfs.append(default_with_nyoom_df)
-    for i, df in enumerate(data_dfs):
-        print("Data", i, df.shape)
-
-    autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
-    test_data = autogluon_dfs[0]
-    default_data = autogluon_dfs[1]
-    tablesample_data = autogluon_dfs[2]
-    default_with_nyoom_data = autogluon_dfs[3]
-
+class Model:
+    @staticmethod
     def save_model_eval(_expt_name: str, _df: pd.DataFrame, _train_data: TabularDataset, _test_data: TabularDataset):
         if (Config.SAVE_PATH_EVAL / _expt_name).exists():
             return
@@ -424,72 +351,145 @@ def generate_model():
         accuracy = expt_autogluon.eval(_test_data)
         accuracy.to_parquet(Config.SAVE_PATH_EVAL / _expt_name / "accuracy.parquet")
 
-    save_model_eval("default", default_df, default_data, test_data)
-    save_model_eval("tablesample", tablesample_df, tablesample_data, test_data)
-    save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data)
+    @staticmethod
+    def generate_model():
+        test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
+        default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+        tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
+        default_with_nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
+
+        data_dfs = []
+        data_dfs.append(test_df)
+        data_dfs.append(default_df)
+        data_dfs.append(tablesample_df)
+        data_dfs.append(default_with_nyoom_df)
+        for i, df in enumerate(data_dfs):
+            print("Data", i, df.shape)
+
+        autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
+        test_data = autogluon_dfs[0]
+        default_data = autogluon_dfs[1]
+        tablesample_data = autogluon_dfs[2]
+        default_with_nyoom_data = autogluon_dfs[3]
+
+        Model.save_model_eval("default", default_df, default_data, test_data)
+        Model.save_model_eval("tablesample", tablesample_df, tablesample_data, test_data)
+        Model.save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data)
+
+    @staticmethod
+    def generate_model_sweep_tpch():
+        test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
+        default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+
+        for pct in reversed(list(range(10, 90 + 1, 10))):
+            pct_num_rows = int(default_df.shape[0] * pct / 100)
+            pct_df = default_df.head(pct_num_rows)
+
+            data_dfs = []
+            data_dfs.append(test_df)
+            data_dfs.append(pct_df)
+            for i, df in enumerate(data_dfs):
+                print("Data", i, df.shape)
+
+            autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
+            test_data = autogluon_dfs[0]
+            pct_data = autogluon_dfs[1]
+            Model.save_model_eval(f"pct_{pct}", pct_df, pct_data, test_data)
 
 
-def generate_plot():
+class Plot:
+    @staticmethod
     def load_model_eval(_expt_name: str) -> pd.DataFrame:
         return pd.read_parquet(Config.SAVE_PATH_EVAL / _expt_name)
 
+    @staticmethod
     def read_runtime(_expt_name: str) -> float:
         return pd.read_pickle(Config.SAVE_PATH_OBSERVATION / _expt_name / "runtime.pkl")["Runtime (s)"]
 
+    @staticmethod
     def read_training_time(_expt_name: str) -> float:
         return pd.read_pickle(Config.SAVE_PATH_MODEL / _expt_name / "training_time.pkl")["Training Time (s)"]
 
-    labeled_expt = [
-        # (code name, plot name)
-        ("default", "Default"),
-        ("tablesample", "Sample"),
-        (None, "VerdictDB"),
-        (None, "QPE"),
-        (None, "TSkip"),
-        ("default_with_nyoom", "Nyoom"),
-    ]
+    @staticmethod
+    def generate_plot():
+        labeled_expt = [
+            # (code name, plot name)
+            ("default", "Default"),
+            ("tablesample", "Sample"),
+            (None, "VerdictDB"),
+            (None, "QPE"),
+            (None, "TSkip"),
+            ("default_with_nyoom", "Nyoom"),
+        ]
 
-    mae_s = []
-    runtime_s = []
-    training_time_s = []
-    index = []
-    for expt_name, index_name in labeled_expt:
-        if expt_name is None:
-            # TODO(WAN): temporary hack until we get those working.
-            mae_s.append(0)
-            runtime_s.append(0)
-            training_time_s.append(0)
-        else:
-            metrics = load_model_eval(expt_name)
+        mae_s = []
+        runtime_s = []
+        training_time_s = []
+        index = []
+        for expt_name, index_name in labeled_expt:
+            if expt_name is None:
+                # TODO(WAN): temporary hack until we get those working.
+                mae_s.append(0)
+                runtime_s.append(0)
+                training_time_s.append(0)
+            else:
+                metrics = Plot.load_model_eval(expt_name)
+                mae_s.append(metrics["diff (us)"].mean() / 1e6)
+                runtime_s.append(Plot.read_runtime(expt_name))
+                training_time_s.append(Plot.read_training_time(expt_name))
+            index.append(index_name)
+
+        Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
+        fig, ax = plt.subplots()
+        df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
+        df.plot.bar(ax=ax, rot=45)
+        fig.savefig(Config.SAVE_PATH_PLOT / f"accuracy.pdf")
+        plt.close(fig)
+
+        fig, ax = plt.subplots()
+        df = pd.DataFrame(
+            {
+                "Runtime (s)": runtime_s,
+                "Training Time (s)": training_time_s,
+            },
+            index=index,
+        )
+        df.plot.bar(stacked=True, ax=ax, rot=45)
+        fig.savefig(Config.SAVE_PATH_PLOT / f"runtime.pdf")
+        plt.close(fig)
+
+    @staticmethod
+    def generate_plot_sweep_tpch():
+        pcts = list(reversed(range(10, 90 + 1, 10)))
+        code_names = ["default"] + [f"pct_{pct}" for pct in pcts]
+        plot_names = ["100%"] + [f"{pct}%" for pct in pcts]
+        labeled_expt = zip(code_names, plot_names)
+
+        mae_s = []
+        runtime_s = []
+        training_time_s = []
+        index = []
+        for expt_name, index_name in labeled_expt:
+            metrics = Plot.load_model_eval(expt_name)
             mae_s.append(metrics["diff (us)"].mean() / 1e6)
-            runtime_s.append(read_runtime(expt_name))
-            training_time_s.append(read_training_time(expt_name))
-        index.append(index_name)
+            runtime_s.append(Plot.read_runtime("default"))
+            training_time_s.append(Plot.read_training_time(expt_name))
+            index.append(index_name)
 
-    Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots()
-    df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
-    df.plot.bar(ax=ax, rot=45)
-    fig.savefig(Config.SAVE_PATH_PLOT / f"accuracy.pdf")
-    plt.close(fig)
-
-    fig, ax = plt.subplots()
-    df = pd.DataFrame(
-        {
-            "Runtime (s)": runtime_s,
-            "Training Time (s)": training_time_s,
-        },
-        index=index,
-    )
-    df.plot.bar(stacked=True, ax=ax, rot=45)
-    fig.savefig(Config.SAVE_PATH_PLOT / f"runtime.pdf")
-    plt.close(fig)
+        Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
+        fig, ax = plt.subplots()
+        df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
+        df.plot.bar(ax=ax)
+        fig.savefig(Config.SAVE_PATH_PLOT / f"sweep_tpch.pdf")
+        plt.close(fig)
 
 
 def main():
-    generate_data()
-    generate_model()
-    generate_plot()
+    # generate_data()
+    # Model.generate_model()
+    # Plot.generate_plot()
+    Model.generate_model_sweep_tpch()
+    Plot.generate_plot_sweep_tpch()
 
 
 if __name__ == "__main__":

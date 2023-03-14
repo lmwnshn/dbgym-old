@@ -6,11 +6,10 @@ from pathlib import Path
 from typing import Optional
 
 from flask import Blueprint, current_app
-from plumbum import local
-from plumbum.machines import LocalCommand
-
 from nyoom_flask.extensions import db
 from nyoom_flask.model.instance import NyoomInstance
+from plumbum import local
+from plumbum.machines import LocalCommand
 
 nyoom_flask = Blueprint("nyoom", __name__)
 

@@ -1,5 +1,4 @@
 import sqlalchemy as sa
-
 from nyoom_flask.extensions import db
 
 

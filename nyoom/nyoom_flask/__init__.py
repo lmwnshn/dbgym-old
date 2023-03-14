@@ -1,5 +1,4 @@
 from flask import Flask
-
 from nyoom_flask.config import Config
 from nyoom_flask.extensions import db
 
