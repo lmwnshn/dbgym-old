@@ -358,10 +358,14 @@ class Model:
         tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
         default_with_nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
 
+        tablesample_hack_df = tablesample_df.copy()
+        tablesample_hack_df["Node Type"] = tablesample_hack_df["Node Type"].replace({"Sample Scan": "Seq Scan"})
+
         data_dfs = []
         data_dfs.append(test_df)
         data_dfs.append(default_df)
         data_dfs.append(tablesample_df)
+        data_dfs.append(tablesample_hack_df)
         data_dfs.append(default_with_nyoom_df)
         for i, df in enumerate(data_dfs):
             print("Data", i, df.shape)
@@ -370,10 +374,12 @@ class Model:
         test_data = autogluon_dfs[0]
         default_data = autogluon_dfs[1]
         tablesample_data = autogluon_dfs[2]
-        default_with_nyoom_data = autogluon_dfs[3]
+        tablesample_hack_data = autogluon_dfs[3]
+        default_with_nyoom_data = autogluon_dfs[4]
 
         Model.save_model_eval("default", default_df, default_data, test_data)
         Model.save_model_eval("tablesample", tablesample_df, tablesample_data, test_data)
+        Model.save_model_eval("tablesample_hack", tablesample_hack_df, tablesample_hack_data, test_data)
         Model.save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data)
 
     @staticmethod
@@ -427,10 +433,11 @@ class Plot:
             # (code name, plot name)
             ("default", "Default"),
             ("tablesample", "Sample"),
-            (None, "VerdictDB"),
-            (None, "QPE"),
-            (None, "TSkip"),
-            ("default_with_nyoom", "Nyoom"),
+            ("tablesample_hack", "SampleHack"),
+            # (None, "VerdictDB"),
+            # (None, "QPE"),
+            # (None, "TSkip"),
+            ("default_with_nyoom", "TSkip"),
         ]
 
         mae_s = []
@@ -498,11 +505,12 @@ class Plot:
 
 
 def main():
+    pass
     # generate_data()
     # Model.generate_model()
     # Plot.generate_plot()
     # Model.generate_model_sweep_tpch()
-    Plot.generate_plot_sweep_tpch()
+    # Plot.generate_plot_sweep_tpch()
 
 
 if __name__ == "__main__":
