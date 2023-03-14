@@ -328,6 +328,7 @@ def generate_data():
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS nyoom"))
         engine.dispose()
 
+        req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
         req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
         assert req.status_code == 200
         print("nyoom_start: ", req.text)
