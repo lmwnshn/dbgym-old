@@ -381,6 +381,17 @@ class Model:
         test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
         default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
 
+        data_dfs = []
+        data_dfs.append(test_df)
+        data_dfs.append(default_df)
+        for i, df in enumerate(data_dfs):
+            print("Data", i, df.shape)
+
+        autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
+        test_data = autogluon_dfs[0]
+        default_data = autogluon_dfs[1]
+        Model.save_model_eval(f"default", default_df, default_data, test_data)
+
         for pct in reversed(list(range(10, 90 + 1, 10))):
             pct_num_rows = int(default_df.shape[0] * pct / 100)
             pct_df = default_df.head(pct_num_rows)
