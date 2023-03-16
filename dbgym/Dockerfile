@@ -14,7 +14,7 @@ RUN \
       htop \
       sudo \
       tmux \
-      ttf-mscorefonts-installer \
+      fonts-liberation \
       vim \
     && fc-cache -f -v \
     && apt-get clean

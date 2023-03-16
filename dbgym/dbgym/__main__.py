@@ -43,7 +43,7 @@ figsize_quarter = (1.75, 1.0)
 fig_dpi = 600
 font_mini, font_tiny, font_small, font_medium, font_large, font_huge = 4, 6, 8, 10, 12, 14
 
-plt.rcParams["font.family"] = "Arial"
+plt.rcParams["font.family"] = "Liberation Sans"
 # matplotlib defaults to Type 3 fonts, which are full PostScript fonts.
 # Some publishers only accept Type 42 fonts, which are PostScript wrappers around TrueType fonts.
 plt.rcParams["pdf.fonttype"] = 42
