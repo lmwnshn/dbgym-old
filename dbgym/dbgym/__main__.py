@@ -488,7 +488,6 @@ class Model:
         over_df["Actual Total Time (us)"] = over_df["Actual Total Time (us)"] * rng.uniform(1, 1.5, over_df.shape[0])
 
         gaussian_df = default_df.copy()
-        # Gaussian noise.
         gaussian_df["Actual Total Time (us)"] = gaussian_df["Actual Total Time (us)"].apply(
             lambda x: max(0, rng.normal(loc=x, scale=0.33 * x))
         )
@@ -611,9 +610,9 @@ class Plot:
     def generate_plot_noise_tpch():
         labeled_expt = [
             ("default", "Baseline"),
+            ("default_gaussian", "Gaussian"),
             ("default_under", "Underestimate"),
             ("default_over", "Overestimate"),
-            ("default_gaussian", "Gaussian"),
         ]
 
         mae_s = []
