@@ -611,8 +611,8 @@ class Plot:
         labeled_expt = [
             ("default", "Baseline"),
             ("default_gaussian", "Gaussian"),
-            ("default_under", "Underestimate"),
             ("default_over", "Overestimate"),
+            ("default_under", "Underestimate"),
         ]
 
         mae_s = []
