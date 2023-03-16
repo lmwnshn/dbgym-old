@@ -34,7 +34,7 @@ plt.rcParams["legend.frameon"] = False
 plt.rcParams["savefig.bbox"] = "tight"
 # If 0, the axes spines are eaten. https://github.com/matplotlib/matplotlib/issues/7806
 # Use pdfcrop to fix post-render.
-plt.rcParams["savefig.pad_inches"] = 0.005
+plt.rcParams["savefig.pad_inches"] = 0.05
 
 # From Matt, figsize is (3.5,2) for half-page and (7,2) for full-page.
 figsize_full = (7.0, 2.0)
@@ -479,13 +479,13 @@ class Model:
         test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
         default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
 
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(15721)
 
         under_df = default_df.copy()
         under_df["Actual Total Time (us)"] = under_df["Actual Total Time (us)"] * rng.uniform(0.5, 1, under_df.shape[0])
 
         over_df = default_df.copy()
-        over_df["Actual Total Time (us)"] = over_df["Actual Total Time (us)"] * rng.uniform(1, 2, over_df.shape[0])
+        over_df["Actual Total Time (us)"] = over_df["Actual Total Time (us)"] * rng.uniform(1, 1.5, over_df.shape[0])
 
         gaussian_df = default_df.copy()
         # Gaussian noise.
@@ -629,11 +629,11 @@ class Plot:
 
         Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
         fig_half()
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(1, 1)
         df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
-        ax = df.plot.bar(ax=ax, rot=45, legend=False)
+        ax = df.plot.bar(ax=ax, rot=0, legend=False)
         ax.set_ylabel("Mean Absolute Error (s)")
-        fig.savefig(Config.SAVE_PATH_PLOT / f"noise_tpch.pdf", bbox_inches="tight")
+        fig.savefig(Config.SAVE_PATH_PLOT / f"noise_tpch.pdf")
         plt.close(fig)
 
     @staticmethod
@@ -656,23 +656,22 @@ class Plot:
 
         Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
         fig_half()
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(1, 1)
         df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
-        ax = df.plot.bar(ax=ax, rot=45, legend=False)
+        ax = df.plot.bar(ax=ax, rot=0, legend=False)
         ax.set_xlabel("Percentage of Train Dataset Used")
         ax.set_ylabel("Mean Absolute Error (s)")
-        fig.savefig(Config.SAVE_PATH_PLOT / f"sweep_tpch.pdf", bbox_inches="tight")
+        fig.savefig(Config.SAVE_PATH_PLOT / f"sweep_tpch.pdf")
         plt.close(fig)
 
 
 def main():
-    for name in ["default", "tablesample", "test"]:
-        df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
-        pd.Series({"Runtime (s)": df.groupby("Query Num").first()["Actual Total Time (us)"].sum() / 1e6}).to_pickle(
-            Config.SAVE_PATH_OBSERVATION / name / "runtime.pkl"
-        )
-
     pass
+    # for name in ["default", "tablesample", "test", "default_with_nyoom"]:
+    #     df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
+    #     pd.Series({"Runtime (s)": df.groupby("Query Num").first()["Actual Total Time (us)"].sum() / 1e6}).to_pickle(
+    #         Config.SAVE_PATH_OBSERVATION / name / "runtime.pkl"
+    #     )
     # generate_data()
     # Model.generate_model()
     # Plot.generate_plot()
