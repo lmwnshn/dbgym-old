@@ -6,6 +6,7 @@ from pathlib import Path
 
 import gymnasium
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pglast
 import requests
@@ -22,6 +23,96 @@ from sklearn.model_selection import train_test_split
 from sqlalchemy import NullPool, create_engine, inspect, text
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.engine.reflection import Inspector
+
+plt.rcParams["axes.grid"] = True
+plt.rcParams["axes.axisbelow"] = True
+plt.rcParams["figure.autolayout"] = True
+plt.rcParams["grid.color"] = "silver"
+plt.rcParams["grid.linestyle"] = "dotted"
+plt.rcParams["image.cmap"] = "tab10"
+plt.rcParams["legend.frameon"] = False
+plt.rcParams["savefig.bbox"] = "tight"
+# If 0, the axes spines are eaten. https://github.com/matplotlib/matplotlib/issues/7806
+# Use pdfcrop to fix post-render.
+plt.rcParams["savefig.pad_inches"] = 0.005
+
+# From Matt, figsize is (3.5,2) for half-page and (7,2) for full-page.
+figsize_full = (7.0, 2.0)
+figsize_half = (3.5, 2.0)
+figsize_quarter = (1.75, 1.0)
+fig_dpi = 600
+font_mini, font_tiny, font_small, font_medium, font_large, font_huge = 4, 6, 8, 10, 12, 14
+
+plt.rcParams["font.family"] = "Arial"
+# matplotlib defaults to Type 3 fonts, which are full PostScript fonts.
+# Some publishers only accept Type 42 fonts, which are PostScript wrappers around TrueType fonts.
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["ps.fonttype"] = 42
+
+
+# https://matplotlib.org/stable/tutorials/introductory/customizing.html#customizing-with-matplotlibrc-files
+
+
+def fig_quarter():
+    plt.rcParams["figure.figsize"] = figsize_quarter
+    plt.rcParams["figure.dpi"] = fig_dpi
+    plt.rcParams["font.size"] = font_mini
+    plt.rcParams["axes.titlesize"] = font_mini
+    plt.rcParams["axes.labelsize"] = font_tiny
+    plt.rcParams["xtick.labelsize"] = font_mini
+    plt.rcParams["ytick.labelsize"] = font_mini
+    plt.rcParams["legend.fontsize"] = font_mini
+    plt.rcParams["figure.titlesize"] = font_small
+
+    for var in ["xtick", "ytick"]:
+        plt.rcParams[f"{var}.major.size"] = 3.5 / 2
+        plt.rcParams[f"{var}.minor.size"] = 2 / 2
+        plt.rcParams[f"{var}.major.width"] = 0.8 / 2
+        plt.rcParams[f"{var}.minor.width"] = 0.6 / 2
+        plt.rcParams[f"{var}.major.pad"] = 3.5 / 2
+        plt.rcParams[f"{var}.minor.pad"] = 3.4 / 2
+    plt.rcParams["axes.linewidth"] = 0.8 / 2
+    plt.rcParams["grid.linewidth"] = 0.8 / 2
+    plt.rcParams["lines.linewidth"] = 2 / 2
+    plt.rcParams["lines.markersize"] = 6 / 2
+
+
+def fig_half():
+    plt.rcParams["figure.figsize"] = figsize_half
+    plt.rcParams["figure.dpi"] = fig_dpi
+    plt.rcParams["font.size"] = font_small
+    plt.rcParams["axes.titlesize"] = font_small
+    plt.rcParams["axes.labelsize"] = font_medium
+    plt.rcParams["xtick.labelsize"] = font_small
+    plt.rcParams["ytick.labelsize"] = font_small
+    plt.rcParams["legend.fontsize"] = font_small
+    plt.rcParams["figure.titlesize"] = font_large
+
+    for var in ["xtick", "ytick"]:
+        plt.rcParams[f"{var}.major.size"] = 3.5
+        plt.rcParams[f"{var}.minor.size"] = 2
+        plt.rcParams[f"{var}.major.width"] = 0.8
+        plt.rcParams[f"{var}.minor.width"] = 0.6
+        plt.rcParams[f"{var}.major.pad"] = 3.5
+        plt.rcParams[f"{var}.minor.pad"] = 3.4
+    plt.rcParams["axes.linewidth"] = 0.8
+    plt.rcParams["grid.linewidth"] = 0.8
+    plt.rcParams["lines.linewidth"] = 2
+    plt.rcParams["lines.markersize"] = 6
+
+
+def fig_full():
+    plt.rcParams["figure.figsize"] = figsize_full
+    plt.rcParams["figure.dpi"] = fig_dpi
+    plt.rcParams["font.size"] = font_medium
+    plt.rcParams["axes.titlesize"] = font_medium
+    plt.rcParams["axes.labelsize"] = font_large
+    plt.rcParams["xtick.labelsize"] = font_medium
+    plt.rcParams["ytick.labelsize"] = font_medium
+    plt.rcParams["legend.fontsize"] = font_medium
+    plt.rcParams["figure.titlesize"] = font_huge
+
+    # TODO(WAN): yet to make a full figure.
 
 
 def _exec(conn: Connection, sql: str, verbose=True):
@@ -384,6 +475,45 @@ class Model:
         Model.save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data)
 
     @staticmethod
+    def generate_model_noise_tpch():
+        test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
+        default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+
+        rng = np.random.default_rng()
+
+        under_df = default_df.copy()
+        under_df["Actual Total Time (us)"] = under_df["Actual Total Time (us)"] * rng.uniform(0.5, 1, under_df.shape[0])
+
+        over_df = default_df.copy()
+        over_df["Actual Total Time (us)"] = over_df["Actual Total Time (us)"] * rng.uniform(1, 2, over_df.shape[0])
+
+        gaussian_df = default_df.copy()
+        # Gaussian noise.
+        gaussian_df["Actual Total Time (us)"] = gaussian_df["Actual Total Time (us)"].apply(
+            lambda x: max(0, rng.normal(loc=x, scale=0.33 * x))
+        )
+
+        data_dfs = []
+        data_dfs.append(test_df)
+        data_dfs.append(default_df)
+        data_dfs.append(under_df)
+        data_dfs.append(over_df)
+        data_dfs.append(gaussian_df)
+        for i, df in enumerate(data_dfs):
+            print("Data", i, df.shape)
+
+        autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
+        test_data = autogluon_dfs[0]
+        default_data = autogluon_dfs[1]
+        under_data = autogluon_dfs[2]
+        over_data = autogluon_dfs[3]
+        gaussian_data = autogluon_dfs[4]
+        Model.save_model_eval(f"default", default_df, default_data, test_data)
+        Model.save_model_eval(f"default_under", under_df, under_data, test_data)
+        Model.save_model_eval(f"default_over", over_df, over_data, test_data)
+        Model.save_model_eval(f"default_gaussian", gaussian_df, gaussian_data, test_data)
+
+    @staticmethod
     def generate_model_sweep_tpch():
         test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
         default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
@@ -478,6 +608,35 @@ class Plot:
         plt.close(fig)
 
     @staticmethod
+    def generate_plot_noise_tpch():
+        labeled_expt = [
+            ("default", "Baseline"),
+            ("default_under", "Underestimate"),
+            ("default_over", "Overestimate"),
+            ("default_noise", "Gaussian"),
+        ]
+
+        mae_s = []
+        runtime_s = []
+        training_time_s = []
+        index = []
+        for expt_name, index_name in labeled_expt:
+            metrics = Plot.load_model_eval(expt_name)
+            mae_s.append(metrics["diff (us)"].mean() / 1e6)
+            runtime_s.append(Plot.read_runtime("default"))
+            training_time_s.append(Plot.read_training_time(expt_name))
+            index.append(index_name)
+
+        Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
+        fig_half()
+        fig, ax = plt.subplots()
+        df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
+        ax = df.plot.bar(ax=ax, rot=45, legend=False)
+        ax.set_ylabel("Mean Absolute Error (s)")
+        fig.savefig(Config.SAVE_PATH_PLOT / f"noise_tpch.pdf", bbox_inches="tight")
+        plt.close(fig)
+
+    @staticmethod
     def generate_plot_sweep_tpch():
         pcts = list(reversed(range(10, 90 + 1, 10)))
         code_names = ["default"] + [f"pct_{pct}" for pct in pcts]
@@ -496,6 +655,7 @@ class Plot:
             index.append(index_name)
 
         Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
+        fig_half()
         fig, ax = plt.subplots()
         df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
         ax = df.plot.bar(ax=ax, rot=45, legend=False)
@@ -512,6 +672,8 @@ def main():
     # Plot.generate_plot()
     # Model.generate_model_sweep_tpch()
     # Plot.generate_plot_sweep_tpch()
+    # Model.generate_model_noise_tpch()
+    # Plot.generate_plot_noise_tpch()
 
 
 if __name__ == "__main__":
