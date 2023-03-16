@@ -613,7 +613,7 @@ class Plot:
             ("default", "Baseline"),
             ("default_under", "Underestimate"),
             ("default_over", "Overestimate"),
-            ("default_noise", "Gaussian"),
+            ("default_gaussian", "Gaussian"),
         ]
 
         mae_s = []
@@ -666,6 +666,12 @@ class Plot:
 
 
 def main():
+    for name in ["default", "tablesample", "test"]:
+        df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
+        pd.Series({"Runtime (s)": df.groupby("Query Num").first()["Actual Total Time (us)"].sum() / 1e6}).to_pickle(
+            Config.SAVE_PATH_OBSERVATION / name / "runtime.pkl"
+        )
+
     pass
     # generate_data()
     # Model.generate_model()
