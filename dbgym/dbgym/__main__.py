@@ -423,7 +423,7 @@ def generate_data():
         req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
         assert req.status_code == 200
         print("nyoom_start: ", req.text)
-        gym("default_with_nyoom", db_snapshot_path, default_workloads, seed=seed, overwrite=True)
+        gym("default_with_nyoom", db_snapshot_path, default_workloads, seed=seed, overwrite=False)
         req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
         assert req.status_code == 200
         print("nyoom_stop: ", req.text)
@@ -583,18 +583,24 @@ class Plot:
             else:
                 metrics = Plot.load_model_eval(expt_name)
                 mae_s.append(metrics["diff (us)"].mean() / 1e6)
-                runtime_s.append(Plot.read_runtime(expt_name))
+                if expt_name == "tablesample_hack":
+                    runtime_s.append(Plot.read_runtime("tablesample"))
+                else:
+                    runtime_s.append(Plot.read_runtime(expt_name))
                 training_time_s.append(Plot.read_training_time(expt_name))
             index.append(index_name)
 
         Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
-        fig, ax = plt.subplots()
+        fig_half()
+        fig, ax = plt.subplots(1, 1)
         df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
-        df.plot.bar(ax=ax, rot=45)
+        ax = df.plot.bar(ax=ax, rot=0, legend=False)
+        ax.set_ylabel("Mean Absolute Error (s)")
         fig.savefig(Config.SAVE_PATH_PLOT / f"accuracy.pdf")
         plt.close(fig)
 
-        fig, ax = plt.subplots()
+        fig_half()
+        fig, ax = plt.subplots(1, 1)
         df = pd.DataFrame(
             {
                 "Runtime (s)": runtime_s,
@@ -602,7 +608,8 @@ class Plot:
             },
             index=index,
         )
-        df.plot.bar(stacked=True, ax=ax, rot=45)
+        ax = df.plot.bar(stacked=True, ax=ax, rot=45)
+        ax.set_ylabel("Time (s)")
         fig.savefig(Config.SAVE_PATH_PLOT / f"runtime.pdf")
         plt.close(fig)
 
@@ -666,11 +673,6 @@ class Plot:
 
 def main():
     pass
-    # for name in ["default", "tablesample", "test", "default_with_nyoom"]:
-    #     df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
-    #     pd.Series({"Runtime (s)": df.groupby("Query Num").first()["Actual Total Time (us)"].sum() / 1e6}).to_pickle(
-    #         Config.SAVE_PATH_OBSERVATION / name / "runtime.pkl"
-    #     )
     # generate_data()
     # Model.generate_model()
     # Plot.generate_plot()
