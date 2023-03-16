@@ -248,7 +248,7 @@ def gym(name, db_snapshot_path, workloads, seed=15721, overwrite=True):
         observation, info = env.reset(seed=15721)
         df = observation_space.convert_observations_to_df(observation)
 
-        pd.Series({"Runtime (s)": df["Actual Total Time (us)"].sum() / 1e6}).to_pickle(
+        pd.Series({"Runtime (s)": df.groupby("Query Num").first()["Actual Total Time (us)"].sum() / 1e6}).to_pickle(
             Config.SAVE_PATH_OBSERVATION / name / "runtime.pkl"
         )
 
