@@ -608,7 +608,7 @@ class Plot:
             },
             index=index,
         )
-        ax = df.plot.bar(stacked=True, ax=ax, rot=45)
+        ax = df.plot.bar(stacked=True, ax=ax, rot=0)
         ax.set_ylabel("Time (s)")
         fig.savefig(Config.SAVE_PATH_PLOT / f"runtime.pdf")
         plt.close(fig)
