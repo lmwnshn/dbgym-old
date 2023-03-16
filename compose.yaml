@@ -27,6 +27,7 @@ services:
       TRAINER_PG_PASS: "${TRAINER_PG_PASS}"
       TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
       TRAINER_PG_USER: "${TRAINER_PG_USER}"
+    init: true
     ports:
       - "${TRAINER_PORT}:${TRAINER_PORT}"
       - "${TRAINER_PG_PORT}:${TRAINER_PG_PORT}"
@@ -35,6 +36,7 @@ services:
       - "trainer:/trainer"
       - "tpch_sf1:/tpch_sf1"
       - "tpch_sf10:/tpch_sf10"
+      - "/tmp/:/tmp/"
 
   monitor:
     build:
@@ -89,12 +91,10 @@ services:
       TRAINER_PG_PASS: "${TRAINER_PG_PASS}"
       TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
       TRAINER_PG_USER: "${TRAINER_PG_USER}"
-    init: true
     volumes:
       - "dbgym:/dbgym"
       - "tpch_queries:/tpch_queries"
       - "tpch_schema:/tpch_schema"
-      - "/tmp/:/tmp/"
     profiles:
       - "gym"
 
