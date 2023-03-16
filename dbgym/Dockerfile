@@ -10,10 +10,13 @@ RUN \
 RUN \
     apt-get update \
     && apt-get install -y \
+      fontconfig \
       htop \
       sudo \
       tmux \
+      ttf-mscorefonts-installer \
       vim \
+    && fc-cache -f -v \
     && apt-get clean
 
 RUN usermod -aG sudo dbgym \
