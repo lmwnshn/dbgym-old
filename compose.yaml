@@ -90,7 +90,6 @@ services:
       TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
       TRAINER_PG_USER: "${TRAINER_PG_USER}"
     init: true
-    privileged: true
     volumes:
       - "dbgym:/dbgym"
       - "tpch_queries:/tpch_queries"

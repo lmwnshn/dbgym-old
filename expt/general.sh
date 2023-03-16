@@ -5,6 +5,9 @@ while sleep 300; do sudo --validate; kill -0 "$$" || exit; done 2>/dev/null &
 
 set -euxo pipefail
 
+# TODO(WAN): I'd personally prefer it on the container, but eh.
+echo '/tmp/core.%h.%e.%t' | sudo tee /proc/sys/kernel/core_pattern
+
 IS_DEV_MACHINE=0
 if [[ "$(hostname --all-fqdns)" == *"db.pdl.local.cmu.edu"* ]]; then
   if ! docker info | grep "Docker Root Dir: /mnt/nvme0n1"; then
