@@ -1,3 +1,4 @@
+import traceback
 import time
 
 from sqlalchemy import NullPool, create_engine, text
@@ -85,23 +86,49 @@ def main():
                         # # TODO(WAN): don't need to read the result since we just obtained it.
                         # results_df = pd.read_sql_table("nyoom_results", gym_conn)
                         # TODO(WAN): pd.read_sql and pd.read_sql_table is cursed for some reason.
+                        active = [(pid, token) for _, pid, token, _ in nyoom_results]
 
-                        # print("Analyzing: ", [pid for _, pid, _, _ in nyoom_results])
-                        for ts, pid, token, plan in nyoom_results:
-                            analyze = Analyze(relname_reltuples_map, indexname_tablename_map, plan)
-                            try:
-                                analyze.compute_bounds()
-                            except Exception as e:
-                                filename = f"/nyoom/{pid}-{ts}.png"
-                                analyze.viz(filename)
-                                print(e)
-                                print(f"Error computing bounds, see: {filename}\n")
-
-                            cutoff_pct = 10
-                            min_processed = 1000
-                            victim_plan_node_ids = analyze.get_victims(
-                                cutoff_pct=cutoff_pct, min_processed=min_processed
+                        print("\n\nnew active set")
+                        for active_pid, active_token in active:
+                            select_sql = text(
+                                f"""
+                                SELECT ts, pid, token, plan FROM nyoom_results
+                                WHERE pid = {active_pid} AND token={token}
+                                ORDER BY id DESC
+                                LIMIT 3
+                                """
                             )
+                            active_results = gym_conn.execute(select_sql)
+                            active_results = [(ts, pid, token, plan) for ts, pid, token, plan in active_results]
+
+                            analyzes = []
+                            for ts, pid, token, plan in active_results:
+                                analyze = Analyze(relname_reltuples_map, indexname_tablename_map, plan)
+                                try:
+                                    analyze.compute_bounds()
+                                    analyzes.append(analyze)
+                                except Exception as e:
+                                    filename = f"/nyoom/{pid}-{ts}.png"
+                                    analyze.viz(filename)
+                                    print(f"Error computing bounds, see: {filename}\n")
+                                    with open(f"/nyoom/{pid}-{ts}-traceback.txt", "w") as f:
+                                        traceback.print_exception(e, file=f)
+                                    with open(f"/nyoom/{pid}-{ts}-plan.json", "w") as f:
+                                        print(plan, file=f)
+
+                            if len(analyzes) <= 2:
+                                # Not enough data to make a decision.
+                                continue
+                                
+                            analysis = Analyze.compare(analyzes[-2], analyzes[-1])
+                            victim_plan_node_ids = analysis["Stop These Plan Nodes"]
+
+                            # cutoff_pct = 10
+                            # min_processed = 1000
+                            # victim_plan_node_ids = analyze.get_victims(
+                            #     cutoff_pct=cutoff_pct, min_processed=min_processed
+                            # )
+
                             print(
                                 f"Stopping {pid=} {token=} [{cutoff_pct=}, {min_processed=}]: ",
                                 victim_plan_node_ids,

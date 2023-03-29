@@ -1,3 +1,4 @@
+antropy
 flask
 flask-sqlalchemy
 gunicorn
