@@ -1,5 +1,5 @@
-import traceback
 import time
+import traceback
 
 from sqlalchemy import NullPool, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -14,7 +14,7 @@ def main():
     )
     with gym_engine.connect() as gym_conn:
         setup_sqls = [
-            "DROP TABLE IF EXISTS nyoom_results",
+            # "DROP TABLE IF EXISTS nyoom_results",
             "CREATE TABLE IF NOT EXISTS nyoom_results (id serial, ts timestamp, pid int, token int, plan text)",
         ]
 
@@ -88,7 +88,6 @@ def main():
                         # TODO(WAN): pd.read_sql and pd.read_sql_table is cursed for some reason.
                         active = [(pid, token) for _, pid, token, _ in nyoom_results]
 
-                        print("\n\nnew active set")
                         for active_pid, active_token in active:
                             select_sql = text(
                                 f"""
@@ -119,7 +118,7 @@ def main():
                             if len(analyzes) <= 2:
                                 # Not enough data to make a decision.
                                 continue
-                                
+
                             analysis = Analyze.compare(analyzes[-2], analyzes[-1])
                             victim_plan_node_ids = analysis["Stop These Plan Nodes"]
 

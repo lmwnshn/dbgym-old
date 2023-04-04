@@ -449,6 +449,9 @@ class Model:
         default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
         tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
         default_with_nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
+        default_with_nyoom_pre_hash_df = pd.read_parquet(
+            Config.SAVE_PATH_OBSERVATION / "default_with_nyoom_pre_hash" / "0.parquet"
+        )
 
         tablesample_hack_df = tablesample_df.copy()
         tablesample_hack_df["Node Type"] = tablesample_hack_df["Node Type"].replace({"Sample Scan": "Seq Scan"})
@@ -459,6 +462,7 @@ class Model:
         data_dfs.append(tablesample_df)
         data_dfs.append(tablesample_hack_df)
         data_dfs.append(default_with_nyoom_df)
+        data_dfs.append(default_with_nyoom_pre_hash_df)
         for i, df in enumerate(data_dfs):
             print("Data", i, df.shape)
 
@@ -468,11 +472,15 @@ class Model:
         tablesample_data = autogluon_dfs[2]
         tablesample_hack_data = autogluon_dfs[3]
         default_with_nyoom_data = autogluon_dfs[4]
+        default_with_nyoom_pre_hash_data = autogluon_dfs[5]
 
         Model.save_model_eval("default", default_df, default_data, test_data)
         Model.save_model_eval("tablesample", tablesample_df, tablesample_data, test_data)
         Model.save_model_eval("tablesample_hack", tablesample_hack_df, tablesample_hack_data, test_data)
         Model.save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data)
+        Model.save_model_eval(
+            "default_with_nyoom_pre_hash", default_with_nyoom_pre_hash_df, default_with_nyoom_pre_hash_data, test_data
+        )
 
     @staticmethod
     def generate_model_noise_tpch():
@@ -568,6 +576,7 @@ class Plot:
             # (None, "QPE"),
             # (None, "TSkip"),
             ("default_with_nyoom", "TSkip"),
+            ("default_with_nyoom_pre_hash", "TSkip_nohash"),
         ]
 
         mae_s = []
