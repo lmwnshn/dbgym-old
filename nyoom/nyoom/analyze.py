@@ -28,19 +28,19 @@ class Analyze:
             old_times = np.array(eval(old_times), dtype=np.float64)
             new_times = np.array(eval(new_times), dtype=np.float64)
 
-            result[plan_node_id]["old-mean"] = np.mean(old_times)
-            result[plan_node_id]["old-std"] = np.std(old_times)
-            result[plan_node_id]["new-mean"] = np.mean(new_times)
-            result[plan_node_id]["new-std"] = np.std(new_times)
-
             try:
-                result[plan_node_id]["old-ApEn"] = ant.app_entropy(old_times)
+                # result[plan_node_id]["old-ApEn"] = ant.app_entropy(old_times)
                 result[plan_node_id]["old-SampEn"] = ant.sample_entropy(old_times)
-                result[plan_node_id]["new-ApEn"] = ant.app_entropy(new_times)
+                # result[plan_node_id]["new-ApEn"] = ant.app_entropy(new_times)
                 result[plan_node_id]["new-SampEn"] = ant.sample_entropy(new_times)
             except ValueError:
                 # Not enough datapoints.
                 continue
+
+            result[plan_node_id]["old-mean"] = np.mean(old_times)
+            result[plan_node_id]["old-std"] = np.std(old_times)
+            result[plan_node_id]["new-mean"] = np.mean(new_times)
+            result[plan_node_id]["new-std"] = np.std(new_times)
 
         result["Stop These Plan Nodes"] = []
         for plan_node_id in result:
