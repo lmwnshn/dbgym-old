@@ -129,7 +129,7 @@ def main():
                             # )
 
                             print(
-                                f"Stopping {pid=} {token=} [{cutoff_pct=}, {min_processed=}]: ",
+                                f"Stopping {pid=} {token=}: ",
                                 victim_plan_node_ids,
                             )
                             for plan_node_id in victim_plan_node_ids:
