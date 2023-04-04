@@ -24,6 +24,8 @@ class Analyze:
 
             if old_times == "" or new_times == "":
                 continue
+            old_times = np.array(old_times, dtype=np.float64)
+            new_times = np.array(new_times, dtype=np.float64)
 
             result[plan_node_id]["old-mean"] = np.mean(old_times)
             result[plan_node_id]["old-std"] = np.std(old_times)
