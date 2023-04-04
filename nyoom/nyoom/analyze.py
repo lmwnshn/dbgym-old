@@ -23,6 +23,8 @@ class Analyze:
             new_times = new._dict[plan_node_id]["Nyoom StopNode Times"]
 
             if old_times == "" or new_times == "":
+                # Not enough datapoints.
+                del result[plan_node_id]
                 continue
             # TODO(WAN): hacky hack...
             old_times = np.array(eval(old_times), dtype=np.float64)
