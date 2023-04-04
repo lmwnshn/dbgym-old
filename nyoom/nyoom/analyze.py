@@ -55,6 +55,8 @@ class Analyze:
             sampen_old = result[plan_node_id]["old-SampEn"]
             sampen_new = result[plan_node_id]["new-SampEn"]
             pct_tolerance = 20
+            if sampen_old == 0:
+                continue
             similar_entropy = abs(100 - (sampen_new / sampen_old) * 100) <= pct_tolerance
 
             if within_2_std and similar_entropy:
