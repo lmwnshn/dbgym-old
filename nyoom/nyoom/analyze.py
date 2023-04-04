@@ -19,8 +19,8 @@ class Analyze:
         plan_node_ids = list(old._dict.keys())
         for plan_node_id in plan_node_ids:
             result[plan_node_id] = {}
-            old_times = old[plan_node_id]["Nyoom StopNode Times"]
-            new_times = new[plan_node_id]["Nyoom StopNode Times"]
+            old_times = old._dict[plan_node_id]["Nyoom StopNode Times"]
+            new_times = new._dict[plan_node_id]["Nyoom StopNode Times"]
 
             result[plan_node_id]["old-mean"] = np.mean(old_times)
             result[plan_node_id]["old-std"] = np.std(old_times)
