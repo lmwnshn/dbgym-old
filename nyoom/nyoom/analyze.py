@@ -43,7 +43,7 @@ class Analyze:
                 del result[plan_node_id]
                 continue
 
-        result["Stop These Plan Nodes"] = []
+        stoppers = []
         for plan_node_id in result:
             mu_old = result[plan_node_id]["old-mean"]
             std_old = result[plan_node_id]["old-std"]
@@ -56,8 +56,9 @@ class Analyze:
             similar_entropy = abs(100 - (sampen_new / sampen_old) * 100) <= pct_tolerance
 
             if within_2_std and similar_entropy:
-                result["Stop These Plan Nodes"].append(plan_node_id)
+                stoppers.append(plan_node_id)
 
+        result["Stop These Plan Nodes"] = stoppers
         return result
 
     def __init__(self, relname_reltuples_map: dict, indexname_tablename_map: dict, explain_dump: str):
