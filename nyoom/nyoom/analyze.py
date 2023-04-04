@@ -40,8 +40,8 @@ class Analyze:
                 result[plan_node_id]["old-SampEn"] = ant.sample_entropy(old_times)
                 # result[plan_node_id]["new-ApEn"] = ant.app_entropy(new_times)
                 result[plan_node_id]["new-SampEn"] = ant.sample_entropy(new_times)
-            except ValueError:
-                # Not enough datapoints.
+            except Exception:
+                # Not enough datapoints, probably.
                 del result[plan_node_id]
                 continue
 
