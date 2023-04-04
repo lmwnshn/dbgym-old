@@ -22,6 +22,9 @@ class Analyze:
             old_times = old._dict[plan_node_id]["Nyoom StopNode Times"]
             new_times = new._dict[plan_node_id]["Nyoom StopNode Times"]
 
+            if old_times == "" or new_times == "":
+                continue
+
             result[plan_node_id]["old-mean"] = np.mean(old_times)
             result[plan_node_id]["old-std"] = np.std(old_times)
             result[plan_node_id]["old-ApEn"] = ant.app_entropy(old_times)
@@ -32,6 +35,7 @@ class Analyze:
             result[plan_node_id]["new-ApEn"] = ant.app_entropy(new_times)
             result[plan_node_id]["new-SampEn"] = ant.sample_entropy(new_times)
 
+        result["Stop These Plan Nodes"] = []
         for plan_node_id in result:
             mu_old = result[plan_node_id]["old-mean"]
             std_old = result[plan_node_id]["old-std"]
@@ -44,7 +48,6 @@ class Analyze:
             similar_entropy = abs(100 - (sampen_new / sampen_old) * 100) <= pct_tolerance
 
             if within_2_std and similar_entropy:
-                result["Stop These Plan Nodes"] = result.get("Stop These Plan Nodes", [])
                 result["Stop These Plan Nodes"].append(plan_node_id)
 
         return result
