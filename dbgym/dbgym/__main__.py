@@ -577,7 +577,7 @@ class Plot:
             # (None, "QPE"),
             # (None, "TSkip"),
             ("default_with_nyoom", "TSkip"),
-            ("default_with_nyoom_pre_hash", "TSkip_nohash"),
+            # ("default_with_nyoom_pre_hash", "TSkip_nohash"),
         ]
 
         mae_s = []
@@ -680,7 +680,8 @@ class Plot:
         fig.savefig(Config.SAVE_PATH_PLOT / f"sweep_tpch.pdf")
         plt.close(fig)
 
-    def generate_tpch_runtime_by_query_HACK(self):
+    @staticmethod
+    def generate_tpch_runtime_by_query_HACK():
         def plot(df, plot_path):
             times = df["Actual Total Time (us)"]
             sum_children_times = []
