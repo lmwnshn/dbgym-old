@@ -5,6 +5,7 @@ import copy
 from pathlib import Path
 
 import gymnasium
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -679,6 +680,39 @@ class Plot:
         fig.savefig(Config.SAVE_PATH_PLOT / f"sweep_tpch.pdf")
         plt.close(fig)
 
+    def generate_tpch_runtime_by_query_HACK(self):
+        def plot(df, plot_path):
+            times = df["Actual Total Time (us)"]
+            sum_children_times = []
+            assert (df["Observation Index"] == df.index).all()
+            # TODO(WAN): We know this has an issue for certain plan nodes, e.g., just assert > 0 to find them.
+            #            But we only need a rough idea and we're not using this figure directly.
+            for index_set in df["Children Observation Indexes"]:
+                children_time = 0
+                for idx in index_set:
+                    children_time += times[idx]
+                sum_children_times.append(children_time)
+            df["Children Total Time (us)"] = sum_children_times
+            df["Differenced Time (us)"] = df["Actual Total Time (us)"] - df["Children Total Time (us)"]
+
+            # TODO(WAN): This is a hack too, relying on how we issue the queries.
+            df["TPC-H Query Num"] = ((df["Query Num"] % 24) - 1) % 24
+            # TODO(WAN): Followed by a hack to remap into the intuitive range.
+            df["TPC-H Query Num"] = df["TPC-H Query Num"].apply(lambda x: x + 1 if x < 15 else x - 1 if x > 15 else x)
+
+            means = df.groupby(["TPC-H Query Num", "Node Type"])["Differenced Time (us)"].mean()
+            ax = means.unstack().plot(kind="bar", stacked=True, cmap=matplotlib.colormaps["tab20"])
+            ax.legend(bbox_to_anchor=(1.0, 1.0))
+            ax.set_ylabel("Time (us)")
+            ax.set_xlabel("TPC-H Query Num")
+            plt.tight_layout()
+            plt.savefig(plot_path)
+
+        default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+        nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
+        plot(default_df, Config.SAVE_PATH_PLOT / "tpch_runtime_by_query_default_HACK.pdf")
+        plot(nyoom_df, Config.SAVE_PATH_PLOT / "tpch_runtime_by_query_nyoom_HACK.pdf")
+
 
 def main():
     pass
@@ -689,6 +723,7 @@ def main():
     # Plot.generate_plot_sweep_tpch()
     # Model.generate_model_noise_tpch()
     # Plot.generate_plot_noise_tpch()
+    Plot.generate_tpch_runtime_by_query_HACK()
 
 
 if __name__ == "__main__":
