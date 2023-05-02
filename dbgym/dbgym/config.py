@@ -98,9 +98,9 @@ elif Config.HOSTNAME in ["dev8", "dev9"]:
         "ALTER SYSTEM SET max_parallel_workers = '80';",
         "ALTER SYSTEM SET max_parallel_maintenance_workers = '4';",
     ]
-    Config.TPCH_DATA = Path("/tpch_sf10").absolute()
+    Config.TPCH_DATA = Path("/tpch_sf100").absolute()
     Config.WORKLOAD_SEED_START = 15721
-    Config.WORKLOAD_SEED_END = 16720
+    Config.WORKLOAD_SEED_END = 15820  # 16720
     Config.AUTOGLUON_TIME_LIMIT_S = 60 * 5
 else:
     raise RuntimeError("Customize for your host.")
