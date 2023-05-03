@@ -90,6 +90,7 @@ class DbGymEnv(gymnasium.Env):
                                     result_dict,
                                     query_num,
                                     obs_idx,
+                                    str(sql),
                                 )
                                 obs_idx += len(new_observations)
                                 observations.extend(new_observations)

@@ -1,4 +1,5 @@
 import datetime
+import json
 from collections import OrderedDict
 from typing import Any, Optional
 
@@ -105,10 +106,14 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
         self._num_indexes = len(self._indexes)
 
         space_dict = {
+            "Actual Loops": spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed),
+            "Actual Rows": spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed),
+            "Actual Startup Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
             "Actual Total Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
             "Children Observation Indexes": spaces.Sequence(
                 spaces.Box(low=0, high=np.inf, dtype=np.int64, seed=seed), seed=seed
             ),
+            "Differenced Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
             "Features": spaces.Sequence(
                 spaces.Box(low=-np.inf, high=np.inf, dtype=np.float32, seed=seed),
                 seed=seed,
@@ -117,6 +122,9 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             "Observation Index": spaces.Box(low=0, high=np.inf, dtype=np.int64, seed=seed),
             "Query Hash": spaces.Sequence(spaces.Discrete(len(self._node_types), seed=seed), seed=seed),
             "Query Num": spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed),
+            "Query Plan": spaces.Text(max_length=1000000000, seed=seed),
+            "Query Text": spaces.Text(max_length=100000, seed=seed),
+            "Real Actual Total Time": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
         }
         explain_space = spaces.Dict(spaces=space_dict, seed=seed)
         super().__init__(space=explain_space, seed=seed)
@@ -124,38 +132,88 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
     def sample(self, mask: Optional[dict[str, Any]] = None) -> dict:
         raise NotImplementedError("Sampling this doesn't make sense. Future me problem.")
 
-    def generate(self, result_dict: dict, query_num: int, observation_idx: int) -> list:
+    def generate(self, result_dict: dict, query_num: int, observation_idx: int, sql: str) -> list:
         plan_dict = result_dict["Plan"]
+        self._annotate_real_actual_total_time(plan_dict)
         query_hash = self._featurize_query_hash(plan_dict)
-        return self._generate(plan_dict, query_num, query_hash, observation_idx)
+        return self._generate(plan_dict, query_num, query_hash, observation_idx, sql, result_dict)
 
-    def _generate(self, plan_dict, query_num, query_hash, observation_idx) -> list:
+    def _annotate_real_actual_total_time(self, plan_dict):
+        # https://www.pgmustard.com/blog/calculating-per-operation-times-in-postgres-explain-analyze
+        # https://www.pgmustard.com/docs/explain/actual-total-time
+        children_times = []
+        for child in plan_dict.get("Plans", []):
+            self._annotate_real_actual_total_time(child)
+            children_times.append(child["Real Actual Total Time"])
+
+        operator_w_children = plan_dict["Actual Total Time"] * plan_dict["Actual Loops"]
+        if "Workers" in plan_dict:
+            # TODO(WAN): Probably parallel, so take the max?
+            num_workers = plan_dict["Actual Loops"]
+            if len(plan_dict["Workers"]) == num_workers - 1:
+                # We can compute the leader's timing, use the max.
+                worker_times = []
+                for worker in plan_dict["Workers"]:
+                    worker_time = worker["Actual Total Time"] * worker["Actual Loops"]
+                    worker_times.append(worker_time)
+                total_parallel_time = plan_dict["Actual Total Time"] * num_workers
+                main_worker_time = total_parallel_time - sum(worker_times)
+                worker_times.append(main_worker_time)
+                operator_w_children = max(worker_times)
+            else:
+                # Just use the average reported time.
+                operator_w_children = plan_dict["Actual Total Time"]
+        plan_dict["Real Actual Total Time"] = operator_w_children
+
+    def _generate(self, plan_dict, query_num, query_hash, observation_idx, sql, result_dict) -> list:
         observations = []
 
         # Generate children observations.
         output_observation_index = self._singleton(observation_idx, dtype=np.int64)
         children_observation_indexes = []
         observation_idx += 1
-        if "Plans" in plan_dict:
-            for i, plan in enumerate(plan_dict["Plans"]):
-                children_observation_indexes.append(observation_idx)
-                child_observations = self._generate(plan, query_num, query_hash, observation_idx)
-                observations.extend(child_observations)
-                observation_idx += len(child_observations)
+        for i, plan in enumerate(plan_dict.get("Plans", [])):
+            children_observation_indexes.append(observation_idx)
+            child_observations = self._generate(plan, query_num, query_hash, observation_idx, sql, result_dict)
+            observations.extend(child_observations)
+            observation_idx += len(child_observations)
         output_children_observation_indexes = [
             self._singleton(idx, dtype=np.int64) for idx in children_observation_indexes
         ]
 
+        def get_differenced_time(_plan_dict):
+            # TODO(WAN):
+            #  The clamp is obviously questionable, but I do not know anyone who does anything more intelligent.
+            #  In general, postgres is very "quirky" when it comes to its instrumentation and naming,
+            #  and "Actual Total Time" is
+            #  (1) actually a loop-average actual total time, and
+            #  (2) includes children runtimes except for when it doesn't.
+            #  I have spent too long trying to fix this, and I'm pretty sure it is one of those things that's silently
+            #  a problem for everyone that they don't even know they have.
+            #  Anyways, even if you fork out $$$, EXPLAIN-as-a-service providers seem to be equally naive here,
+            #  and it is not core to the research questions being addressed by the gym, so here we go.
+            #  We also bias to make ourselves worse (we try to never report an aggregated time longer than the real
+            #  runtime), which is the opposite of what some other people do (they force parent >= sum(children)).
+            differenced_time = _plan_dict["Real Actual Total Time"]
+            for child in _plan_dict.get("Plans", []):
+                differenced_time -= child["Real Actual Total Time"]
+            return max(differenced_time, 0)
+
         ordered_dict_items = [
+            ("Actual Loops", self._singleton(plan_dict["Actual Loops"])),
+            ("Actual Rows", self._singleton(plan_dict["Actual Rows"])),
+            ("Actual Startup Time (ms)", self._singleton(plan_dict["Actual Startup Time"])),
             ("Actual Total Time (ms)", self._singleton(plan_dict["Actual Total Time"])),
             ("Children Observation Indexes", output_children_observation_indexes),
+            ("Differenced Time (ms)", self._singleton(get_differenced_time(plan_dict))),
             ("Features", self._featurize(plan_dict)),
             ("Node Type", self._one_hot(self._node_types, plan_dict, "Node Type")),
             ("Observation Index", output_observation_index),
             ("Query Hash", query_hash),
             ("Query Num", self._singleton(query_num, dtype=np.int32)),
-            # ("TupTime Count", plan_dict["TupTime Count"]),
-            # ("TupTimes", plan_dict["TupTimes"]),
+            ("Query Plan", json.dumps(result_dict)),
+            ("Query Text", sql),
+            ("Real Actual Total Time (ms)", self._singleton(plan_dict["Real Actual Total Time"])),
         ]
         observations.append(OrderedDict(ordered_dict_items))
         return observations
@@ -355,13 +413,10 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
         df = df.sort_values("Observation Index").reset_index(drop=True)
         assert all(df["Observation Index"] == df.index), "Missing observations?"
 
-        for cat in [
-            "Query Hash",
-        ]:
-            df[cat] = df[cat].apply(tuple)  # .astype("category") # pending pyarrow support for nested dicts
-
-        df["Actual Total Time (us)"] = df["Actual Total Time (ms)"] * 1000
-        del df["Actual Total Time (ms)"]
+        # TODO(WAN): query hash .astype("category") pending pyarrow support for nested dicts
+        df["Query Hash"] = df["Query Hash"].apply(tuple)
+        df["Query Plan"] = df["Query Plan"].astype("category")
+        df["Query Text"] = df["Query Text"].astype("category")
 
         # Defragment the df.
         df = df.copy()

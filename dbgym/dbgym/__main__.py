@@ -249,10 +249,6 @@ def gym(name, db_snapshot_path, workloads, seed=15721, overwrite=True):
         observation, info = env.reset(seed=15721)
         df = observation_space.convert_observations_to_df(observation)
 
-        pd.Series({"Runtime (s)": df.groupby("Query Num").first()["Actual Total Time (us)"].sum() / 1e6}).to_pickle(
-            Config.SAVE_PATH_OBSERVATION / name / "runtime.pkl"
-        )
-
         df.to_parquet(pq_path)
         obs_iter += 1
 
@@ -450,38 +446,32 @@ class Model:
         default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
         tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
         default_with_nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
-        default_with_nyoom_pre_hash_df = pd.read_parquet(
-            Config.SAVE_PATH_OBSERVATION / "default_with_nyoom_pre_hash" / "0.parquet"
-        )
 
-        tablesample_hack_df = tablesample_df.copy()
-        tablesample_hack_df["Node Type"] = tablesample_hack_df["Node Type"].replace({"Sample Scan": "Seq Scan"})
+        # tablesample_hack_df = tablesample_df.copy()
+        # tablesample_hack_df["Node Type"] = tablesample_hack_df["Node Type"].replace({"Sample Scan": "Seq Scan"})
 
-        data_dfs = []
-        data_dfs.append(test_df)
-        data_dfs.append(default_df)
-        data_dfs.append(tablesample_df)
-        data_dfs.append(tablesample_hack_df)
-        data_dfs.append(default_with_nyoom_df)
-        data_dfs.append(default_with_nyoom_pre_hash_df)
+        data_dfs = [
+            test_df,
+            default_df,
+            tablesample_df,
+            # tablesample_hack_df,
+            default_with_nyoom_df
+        ]
         for i, df in enumerate(data_dfs):
             print("Data", i, df.shape)
 
         autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
-        test_data = autogluon_dfs[0]
-        default_data = autogluon_dfs[1]
-        tablesample_data = autogluon_dfs[2]
-        tablesample_hack_data = autogluon_dfs[3]
-        default_with_nyoom_data = autogluon_dfs[4]
-        default_with_nyoom_pre_hash_data = autogluon_dfs[5]
+        (test_data,
+         default_data,
+         tablesample_data,
+         # tablesample_hack_data,
+         default_with_nyoom_data) \
+            = autogluon_dfs
 
         Model.save_model_eval("default", default_df, default_data, test_data)
         Model.save_model_eval("tablesample", tablesample_df, tablesample_data, test_data)
-        Model.save_model_eval("tablesample_hack", tablesample_hack_df, tablesample_hack_data, test_data)
+        # Model.save_model_eval("tablesample_hack", tablesample_hack_df, tablesample_hack_data, test_data)
         Model.save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data)
-        Model.save_model_eval(
-            "default_with_nyoom_pre_hash", default_with_nyoom_pre_hash_df, default_with_nyoom_pre_hash_data, test_data
-        )
 
     @staticmethod
     def generate_model_noise_tpch():
@@ -491,13 +481,13 @@ class Model:
         rng = np.random.default_rng(15721)
 
         under_df = default_df.copy()
-        under_df["Actual Total Time (us)"] = under_df["Actual Total Time (us)"] * rng.uniform(0.5, 1, under_df.shape[0])
+        under_df["Actual Total Time (ms)"] = under_df["Actual Total Time (ms)"] * rng.uniform(0.5, 1, under_df.shape[0])
 
         over_df = default_df.copy()
-        over_df["Actual Total Time (us)"] = over_df["Actual Total Time (us)"] * rng.uniform(1, 1.5, over_df.shape[0])
+        over_df["Actual Total Time (ms)"] = over_df["Actual Total Time (ms)"] * rng.uniform(1, 1.5, over_df.shape[0])
 
         gaussian_df = default_df.copy()
-        gaussian_df["Actual Total Time (us)"] = gaussian_df["Actual Total Time (us)"].apply(
+        gaussian_df["Actual Total Time (ms)"] = gaussian_df["Actual Total Time (ms)"].apply(
             lambda x: max(0, rng.normal(loc=x, scale=0.33 * x))
         )
 
@@ -572,12 +562,8 @@ class Plot:
             # (code name, plot name)
             ("default", "Default"),
             ("tablesample", "Sample"),
-            ("tablesample_hack", "SampleHack"),
-            # (None, "VerdictDB"),
-            # (None, "QPE"),
-            # (None, "TSkip"),
+            # ("tablesample_hack", "SampleHack"),
             ("default_with_nyoom", "TSkip"),
-            # ("default_with_nyoom_pre_hash", "TSkip_nohash"),
         ]
 
         mae_s = []
@@ -592,7 +578,7 @@ class Plot:
                 training_time_s.append(0)
             else:
                 metrics = Plot.load_model_eval(expt_name)
-                mae_s.append(metrics["diff (us)"].mean() / 1e6)
+                mae_s.append(metrics["diff (ms)"].mean() / 1e3)
                 if expt_name == "tablesample_hack":
                     runtime_s.append(Plot.read_runtime("tablesample"))
                 else:
@@ -638,7 +624,7 @@ class Plot:
         index = []
         for expt_name, index_name in labeled_expt:
             metrics = Plot.load_model_eval(expt_name)
-            mae_s.append(metrics["diff (us)"].mean() / 1e6)
+            mae_s.append(metrics["diff (ms)"].mean() / 1e3)
             runtime_s.append(Plot.read_runtime("default"))
             training_time_s.append(Plot.read_training_time(expt_name))
             index.append(index_name)
@@ -665,7 +651,7 @@ class Plot:
         index = []
         for expt_name, index_name in labeled_expt:
             metrics = Plot.load_model_eval(expt_name)
-            mae_s.append(metrics["diff (us)"].mean() / 1e6)
+            mae_s.append(metrics["diff (ms)"].mean() / 1e3)
             runtime_s.append(Plot.read_runtime("default"))
             training_time_s.append(Plot.read_training_time(expt_name))
             index.append(index_name)
@@ -681,38 +667,19 @@ class Plot:
         plt.close(fig)
 
     @staticmethod
-    def generate_tpch_runtime_by_query_HACK():
-        def plot(df, plot_path):
-            times = df["Actual Total Time (us)"]
-            sum_children_times = []
-            assert (df["Observation Index"] == df.index).all()
-            # TODO(WAN): We know this has an issue for certain plan nodes, e.g., just assert > 0 to find them.
-            #            But we only need a rough idea and we're not using this figure directly.
-            for index_set in df["Children Observation Indexes"]:
-                children_time = 0
-                for idx in index_set:
-                    children_time += times[idx]
-                sum_children_times.append(children_time)
-            df["Children Total Time (us)"] = sum_children_times
-            df["Differenced Time (us)"] = df["Actual Total Time (us)"] - df["Children Total Time (us)"]
-
-            # TODO(WAN): This is a hack too, relying on how we issue the queries.
-            df["TPC-H Query Num"] = ((df["Query Num"] % 24) - 1) % 24
-            # TODO(WAN): Followed by a hack to remap into the intuitive range.
-            df["TPC-H Query Num"] = df["TPC-H Query Num"].apply(lambda x: x + 1 if x < 15 else x - 1 if x > 15 else x)
-
-            means = df.groupby(["TPC-H Query Num", "Node Type"])["Differenced Time (us)"].mean()
-            ax = means.unstack().plot(kind="bar", stacked=True, cmap=matplotlib.colormaps["tab20"])
-            ax.legend(bbox_to_anchor=(1.0, 1.0))
-            ax.set_ylabel("Time (us)")
-            ax.set_xlabel("TPC-H Query Num")
-            plt.tight_layout()
-            plt.savefig(plot_path)
-
+    def generate_tpch_runtime_by_operator_HACK():
         default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
         nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
-        plot(default_df, Config.SAVE_PATH_PLOT / "tpch_runtime_by_query_default_HACK.pdf")
-        plot(nyoom_df, Config.SAVE_PATH_PLOT / "tpch_runtime_by_query_nyoom_HACK.pdf")
+
+        default_sums = default_df.groupby("Node Type")["Differenced Time (ms)"].sum()
+        nyoom_sums = nyoom_df.groupby("Node Type")["Differenced Time (ms)"].sum()
+
+        plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
+        ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
+        ax.set_ylabel("Time (ms)")
+        ax.set_xlabel("Operator Type")
+        plt.tight_layout()
+        plt.savefig(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator_HACK.pdf")
 
 
 def main():
@@ -724,7 +691,7 @@ def main():
     # Plot.generate_plot_sweep_tpch()
     # Model.generate_model_noise_tpch()
     # Plot.generate_plot_noise_tpch()
-    Plot.generate_tpch_runtime_by_query_HACK()
+    # Plot.generate_tpch_runtime_by_operator_HACK()
 
 
 if __name__ == "__main__":

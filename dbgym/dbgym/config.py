@@ -67,7 +67,7 @@ if Config.HOSTNAME == "kapipad":
     ]
     Config.TPCH_DATA = Path("/tpch_sf1").absolute()
     Config.WORKLOAD_SEED_START = 15721
-    Config.WORKLOAD_SEED_END = 15820  # 15730
+    Config.WORKLOAD_SEED_END = 15730  # 15820  # 15730
     Config.AUTOGLUON_TIME_LIMIT_S = 300  # 10
 elif Config.HOSTNAME in ["dev8", "dev9"]:
     Config.PGTUNE_STATEMENTS = [
