@@ -19,8 +19,16 @@ class Analyze:
         plan_node_ids = list(old._dict.keys())
         for plan_node_id in plan_node_ids:
             result[plan_node_id] = {}
-            old_times = old._dict[plan_node_id]["Nyoom StopNode Times"]
-            new_times = new._dict[plan_node_id]["Nyoom StopNode Times"]
+
+            node_type = old._dict[plan_node_id]["Node Type"]
+            assert node_type == new._dict[plan_node_id]["Node Type"]
+
+            times_key = "Nyoom Tuple Times (us)"
+            if node_type in ["Aggregate", "Hash"]:
+                times_key = "Nyoom Secondary Times (us)"
+
+            old_times = old._dict[plan_node_id][times_key]
+            new_times = new._dict[plan_node_id][times_key]
 
             if old_times == "" or new_times == "":
                 # Not enough datapoints.

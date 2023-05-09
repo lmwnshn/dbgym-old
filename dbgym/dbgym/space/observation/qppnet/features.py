@@ -81,9 +81,9 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
     _partial_modes = ["invalid", "Simple", "Partial", "Finalize"]
 
     def __init__(
-        self,
-        db_snapshot: DatabaseSnapshot,
-        seed: int = 15721,
+            self,
+            db_snapshot: DatabaseSnapshot,
+            seed: int = 15721,
     ):
         assert len(db_snapshot.snapshot["schemas"]) == 1, "No support for multiple schemas."
         self._db_snapshot = db_snapshot
@@ -119,12 +119,25 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
                 seed=seed,
             ),
             "Node Type": spaces.MultiBinary(len(self._node_types), seed=seed),
+            "Nyoom Tuple Times (us)": spaces.Sequence(
+                spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed), seed=seed
+            ),
+            "Nyoom Tuple Sizes": spaces.Sequence(
+                spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed), seed=seed
+            ),
+            "Nyoom Secondary Times (us)": spaces.Sequence(
+                spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed), seed=seed
+            ),
+            "Nyoom Secondary Sizes": spaces.Sequence(
+                spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed), seed=seed
+            ),
             "Observation Index": spaces.Box(low=0, high=np.inf, dtype=np.int64, seed=seed),
             "Query Hash": spaces.Sequence(spaces.Discrete(len(self._node_types), seed=seed), seed=seed),
             "Query Num": spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed),
             "Query Plan": spaces.Text(max_length=1000000000, seed=seed),
             "Query Text": spaces.Text(max_length=100000, seed=seed),
-            "Real Actual Total Time": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
+            # TODO(WAN): small joke, real is as real as the actual is actual. Best-effort real, if you will.
+            "Real Actual Total Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
         }
         explain_space = spaces.Dict(spaces=space_dict, seed=seed)
         super().__init__(space=explain_space, seed=seed)
@@ -144,7 +157,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
         children_times = []
         for child in plan_dict.get("Plans", []):
             self._annotate_real_actual_total_time(child)
-            children_times.append(child["Real Actual Total Time"])
+            children_times.append(child["Real Actual Total Time (ms)"])
 
         operator_w_children = plan_dict["Actual Total Time"] * plan_dict["Actual Loops"]
         if "Workers" in plan_dict:
@@ -163,7 +176,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             else:
                 # Just use the average reported time.
                 operator_w_children = plan_dict["Actual Total Time"]
-        plan_dict["Real Actual Total Time"] = operator_w_children
+        plan_dict["Real Actual Total Time (ms)"] = operator_w_children
 
     def _generate(self, plan_dict, query_num, query_hash, observation_idx, sql, result_dict) -> list:
         observations = []
@@ -194,10 +207,19 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             #  and it is not core to the research questions being addressed by the gym, so here we go.
             #  We also bias to make ourselves worse (we try to never report an aggregated time longer than the real
             #  runtime), which is the opposite of what some other people do (they force parent >= sum(children)).
-            differenced_time = _plan_dict["Real Actual Total Time"]
+            differenced_time = _plan_dict["Real Actual Total Time (ms)"]
             for child in _plan_dict.get("Plans", []):
-                differenced_time -= child["Real Actual Total Time"]
+                differenced_time -= child["Real Actual Total Time (ms)"]
             return max(differenced_time, 0)
+
+        def convert_string_array(s, dtype=np.float32):
+            arr = json.loads(s)
+            return [self._singleton(x, dtype=dtype) for x in arr]
+
+        nyoom_tuple_times_us = convert_string_array(plan_dict.get("Nyoom Tuple Times (us)", []))
+        nyoom_tuple_sizes = convert_string_array(plan_dict.get("Nyoom Tuple Sizes", []), dtype=np.int32)
+        nyoom_secondary_times_us = convert_string_array(plan_dict.get("Nyoom Secondary Times (us)", []))
+        nyoom_secondary_sizes = convert_string_array(plan_dict.get("Nyoom Secondary Sizes", []), dtype=np.int32)
 
         ordered_dict_items = [
             ("Actual Loops", self._singleton(plan_dict["Actual Loops"])),
@@ -208,6 +230,10 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             ("Differenced Time (ms)", self._singleton(get_differenced_time(plan_dict))),
             ("Features", self._featurize(plan_dict)),
             ("Node Type", self._one_hot(self._node_types, plan_dict, "Node Type")),
+            ("Nyoom Tuple Times (us)", nyoom_tuple_times_us),
+            ("Nyoom Tuple Sizes", nyoom_tuple_sizes),
+            ("Nyoom Secondary Times (us)", nyoom_secondary_times_us),
+            ("Nyoom Secondary Sizes", nyoom_secondary_sizes),
             ("Observation Index", output_observation_index),
             ("Query Hash", query_hash),
             ("Query Num", self._singleton(query_num, dtype=np.int32)),
@@ -382,7 +408,13 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
         for col in df.columns:
             if _is_listlike(df[col].iloc[0]):
                 lens = df[col].apply(len)
-                if (lens == 1).all():
+                if (lens == 1).all() and col not in [
+                    "Nyoom Tuple Times (us)",
+                    "Nyoom Tuple Sizes",
+                    "Nyoom Secondary Times (us)",
+                    "Nyoom Secondary Sizes",
+                    "Query Hash",
+                ]:
                     # If this is a Box shape, [x], then unwrap the ndarray value.
                     df[col] = df[col].apply(lambda arr: arr.item())
                 elif len(df[col].iloc[lens.argmax()]) > 0 and _is_listlike(df[col].iloc[lens.argmax()]):

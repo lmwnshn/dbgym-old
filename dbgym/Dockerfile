@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM} python:3.9
+FROM --platform=${BUILDPLATFORM} python:3.9.16
 
 WORKDIR /app
 

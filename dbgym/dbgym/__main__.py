@@ -148,9 +148,10 @@ def exists(dataset):
 
 def load_if_not_exists(dataset):
     if exists(dataset):
-        pass
+        return False
     else:
         load(dataset)
+        return True
 
 
 def load(dataset):
@@ -220,7 +221,10 @@ def prepare():
     prewarm_all()
 
 
-def gym(name, db_snapshot_path, workloads, seed=15721, overwrite=True):
+def gym(name, db_snapshot_path, workloads, setup_sqls=None, seed=15721, overwrite=True):
+    if setup_sqls is None:
+        setup_sqls = []
+
     db_snapshot = DatabaseSnapshot.from_file(db_snapshot_path)
 
     # Run the queries in the gym.
@@ -243,7 +247,7 @@ def gym(name, db_snapshot_path, workloads, seed=15721, overwrite=True):
             connstr=Config.TRAINER_PG_URI,
             workloads=workloads,
             seed=seed,
-            setup_sqls=["create extension if not exists nyoom"],
+            setup_sqls=setup_sqls,
         )
 
         observation, info = env.reset(seed=15721)
@@ -390,12 +394,12 @@ def generate_data():
         trainer.dbms_install_nyoom()
         pgtune()
         trainer.dbms_restart()
-        load_if_not_exists("tpch")
+        loaded = load_if_not_exists("tpch")
         prepare()
 
         # TODO(WAN): assumes read-only.
         db_snapshot_path = Path("/dbgym/snapshot.pkl").absolute()
-        if not db_snapshot_path.exists():
+        if loaded or not db_snapshot_path.exists():
             print("Snapshot: generating.")
             engine = create_engine(
                 Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
@@ -420,19 +424,86 @@ def generate_data():
         req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
         assert req.status_code == 200
         print("nyoom_start: ", req.text)
-        gym("default_with_nyoom", db_snapshot_path, default_workloads, seed=seed, overwrite=False)
+        setup_sqls = ["CREATE EXTENSION IF NOT EXISTS nyoom"]
+        gym("default_with_nyoom", db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed,
+            overwrite=False)
         req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
         assert req.status_code == 200
         print("nyoom_stop: ", req.text)
 
 
+def generate_seqscan_data():
+    print("generate_seqscan_data")
+    telemetry_window_size = 100000
+    telemetry_tuple_counts = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000]
+    workloads = [Workload(["SELECT * FROM lineitem"]) for _ in range(100)]
+    default_workloads, test_workloads = train_test_split(workloads, test_size=0.2)
+
+    configs = [
+        (default_workloads, telemetry_window_size, ttc)
+        for ttc in telemetry_tuple_counts
+    ]
+
+    seed = 15721
+    with PostgresTrainer(Config.TRAINER_URL, force_rebuild=False) as trainer:
+        assert trainer.dbms_exists(), "Startup failed?"
+        trainer.dbms_install_nyoom()
+        pgtune()
+        trainer.dbms_restart()
+        loaded = load_if_not_exists("tpch")
+        prepare()
+
+        # TODO(WAN): assumes read-only.
+        db_snapshot_path = Path("/dbgym/snapshot.pkl").absolute()
+        if loaded or not db_snapshot_path.exists():
+            print("Snapshot: generating.")
+            engine = create_engine(
+                Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+            )
+            db_snapshot = DatabaseSnapshot(engine)
+            engine.dispose()
+            db_snapshot.to_file(db_snapshot_path)
+            print("Snapshot: complete.")
+
+        gym("test", db_snapshot_path, test_workloads, seed=seed, overwrite=False)
+
+        seed = 15721
+        for workload, tws, ttc in configs:
+            setup_sqls = [
+                "CREATE EXTENSION IF NOT EXISTS nyoom",
+                f"SET nyoom.telemetry_window_size = {tws}",
+                f"SET nyoom.telemetry_tuple_count = {ttc}",
+            ]
+
+            expt_name = f"seqscan_lineitem_tws{tws}_ttc{ttc}"
+            gym(expt_name, db_snapshot_path, workload, setup_sqls=setup_sqls, seed=seed, overwrite=True)
+
+            engine = create_engine(
+                Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+            )
+            with engine.connect() as conn:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS nyoom"))
+            engine.dispose()
+
+            req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
+            req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
+            assert req.status_code == 200
+            print("nyoom_start: ", req.text)
+            expt_name = f"seqscan_lineitem_tws{tws}_ttc{ttc}_nyoom"
+            gym(expt_name, db_snapshot_path, workload, setup_sqls=setup_sqls, seed=seed, overwrite=True)
+            req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
+            assert req.status_code == 200
+            print("nyoom_stop: ", req.text)
+
+
 class Model:
     @staticmethod
-    def save_model_eval(_expt_name: str, _df: pd.DataFrame, _train_data: TabularDataset, _test_data: TabularDataset):
+    def save_model_eval(_expt_name: str, _df: pd.DataFrame, _train_data: TabularDataset, _test_data: TabularDataset,
+                        predictor_target: str):
         if (Config.SAVE_PATH_EVAL / _expt_name).exists():
             return
 
-        expt_autogluon = AutogluonModel(Config.SAVE_PATH_MODEL / _expt_name)
+        expt_autogluon = AutogluonModel(Config.SAVE_PATH_MODEL / _expt_name, predictor_target=predictor_target)
         if not expt_autogluon.try_load():
             expt_autogluon.train(_train_data)
 
@@ -460,7 +531,8 @@ class Model:
         for i, df in enumerate(data_dfs):
             print("Data", i, df.shape)
 
-        autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
+        predictor_target = "Actual Total Time (ms)"
+        autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs, predictor_target=predictor_target)
         (test_data,
          default_data,
          tablesample_data,
@@ -468,10 +540,12 @@ class Model:
          default_with_nyoom_data) \
             = autogluon_dfs
 
-        Model.save_model_eval("default", default_df, default_data, test_data)
-        Model.save_model_eval("tablesample", tablesample_df, tablesample_data, test_data)
-        # Model.save_model_eval("tablesample_hack", tablesample_hack_df, tablesample_hack_data, test_data)
-        Model.save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data)
+        Model.save_model_eval("default", default_df, default_data, test_data, predictor_target=predictor_target)
+        Model.save_model_eval("tablesample", tablesample_df, tablesample_data, test_data,
+                              predictor_target=predictor_target)
+        # Model.save_model_eval("tablesample_hack", tablesample_hack_df, tablesample_hack_data, test_data, predictor_target=predictor_target)
+        Model.save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data,
+                              predictor_target=predictor_target)
 
     @staticmethod
     def generate_model_noise_tpch():
@@ -500,16 +574,18 @@ class Model:
         for i, df in enumerate(data_dfs):
             print("Data", i, df.shape)
 
-        autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
+        predictor_target = "Actual Total Time (ms)"
+        autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs, predictor_target=predictor_target)
         test_data = autogluon_dfs[0]
         default_data = autogluon_dfs[1]
         under_data = autogluon_dfs[2]
         over_data = autogluon_dfs[3]
         gaussian_data = autogluon_dfs[4]
-        Model.save_model_eval(f"default", default_df, default_data, test_data)
-        Model.save_model_eval(f"default_under", under_df, under_data, test_data)
-        Model.save_model_eval(f"default_over", over_df, over_data, test_data)
-        Model.save_model_eval(f"default_gaussian", gaussian_df, gaussian_data, test_data)
+        Model.save_model_eval(f"default", default_df, default_data, test_data, predictor_target=predictor_target)
+        Model.save_model_eval(f"default_under", under_df, under_data, test_data, predictor_target=predictor_target)
+        Model.save_model_eval(f"default_over", over_df, over_data, test_data, predictor_target=predictor_target)
+        Model.save_model_eval(f"default_gaussian", gaussian_df, gaussian_data, test_data,
+                              predictor_target=predictor_target)
 
     @staticmethod
     def generate_model_sweep_tpch():
@@ -522,10 +598,11 @@ class Model:
         for i, df in enumerate(data_dfs):
             print("Data", i, df.shape)
 
+        predictor_target = "Actual Total Time (ms)"
         autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
         test_data = autogluon_dfs[0]
         default_data = autogluon_dfs[1]
-        Model.save_model_eval(f"default", default_df, default_data, test_data)
+        Model.save_model_eval(f"default", default_df, default_data, test_data, predictor_target=predictor_target)
 
         for pct in reversed(list(range(10, 90 + 1, 10))):
             pct_num_rows = int(default_df.shape[0] * pct / 100)
@@ -537,10 +614,10 @@ class Model:
             for i, df in enumerate(data_dfs):
                 print("Data", i, df.shape)
 
-            autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs)
+            autogluon_dfs = AutogluonModel.make_padded_datasets(data_dfs, predictor_target=predictor_target)
             test_data = autogluon_dfs[0]
             pct_data = autogluon_dfs[1]
-            Model.save_model_eval(f"pct_{pct}", pct_df, pct_data, test_data)
+            Model.save_model_eval(f"pct_{pct}", pct_df, pct_data, test_data, predictor_target=predictor_target)
 
 
 class Plot:
@@ -681,17 +758,49 @@ class Plot:
         plt.tight_layout()
         plt.savefig(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator_HACK.pdf")
 
+    @staticmethod
+    def generate_tpch_runtime_by_operator_HACK():
+        default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+        nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
+
+        default_sums = default_df.groupby("Node Type")["Differenced Time (ms)"].sum()
+        nyoom_sums = nyoom_df.groupby("Node Type")["Differenced Time (ms)"].sum()
+
+        plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
+        ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
+        ax.set_ylabel("Time (ms)")
+        ax.set_xlabel("Operator Type")
+        plt.tight_layout()
+        plt.savefig(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator_HACK.pdf")
+
+    @staticmethod
+    def generate_tpch_runtime_by_operator():
+        default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+        nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
+
+        default_sums = default_df.groupby("Node Type")["Real Actual Total Time (ms)"].sum()
+        nyoom_sums = nyoom_df.groupby("Node Type")["Real Actual Total Time (ms)"].sum()
+
+        plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
+        ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
+        ax.set_ylabel("Time (ms)")
+        ax.set_xlabel("Operator Type")
+        plt.tight_layout()
+        plt.savefig(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator.pdf")
+
 
 def main():
     pass
-    # generate_data()
-    # Model.generate_model()
+    generate_data()
+    Model.generate_model()
     # Plot.generate_plot()
     # Model.generate_model_sweep_tpch()
     # Plot.generate_plot_sweep_tpch()
     # Model.generate_model_noise_tpch()
     # Plot.generate_plot_noise_tpch()
-    # Plot.generate_tpch_runtime_by_operator_HACK()
+    Plot.generate_tpch_runtime_by_operator_HACK()
+    Plot.generate_tpch_runtime_by_operator()
+    # generate_seqscan_data()
 
 
 if __name__ == "__main__":

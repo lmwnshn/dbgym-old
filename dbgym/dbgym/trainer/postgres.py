@@ -4,6 +4,10 @@ from dbgym.trainer.base import BaseTrainer
 
 class PostgresTrainer(BaseTrainer):
     def __enter__(self):
+        if self.dbms_pull_maybe_remake():
+            self.dbms_stop()
+            self.dbms_start()
+
         if self.force_rebuild or not self.dbms_exists():
             self.dbms_bootstrap()
             self.dbms_init()
@@ -15,7 +19,7 @@ class PostgresTrainer(BaseTrainer):
             # Starting up, wait.
             self.dbms_isready_blocking()
         elif isready_retcode == 2:
-            # Not responding, force stop and start again.
+            # Not responding or not started, force stop and start again.
             self.dbms_stop()
             self.dbms_start()
         return self
@@ -57,6 +61,11 @@ class PostgresTrainer(BaseTrainer):
         print("dbms_restart")
         self.dbms_stop()
         self.dbms_start()
+
+    def dbms_pull_maybe_remake(self):
+        print("dbms_pull_maybe_remake")
+        result = requests.post(self._service_url + "/postgres/pull_maybe_remake/")
+        return result.json()["remake"]
 
     def dbms_install_nyoom(self):
         print("dbms_install_nyoom")

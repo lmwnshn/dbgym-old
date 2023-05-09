@@ -116,6 +116,40 @@ def clone():
         return run_command(command)
 
 
+@postgres.route("/pull_maybe_remake/", methods=["POST"])
+def pull_maybe_remake():
+    with tmp_cwd(get_pg_dir()):
+        command = local["git"]["rev-parse", "HEAD"]
+        old_head = run_command(command)
+        command = local["git"]["pull", "--ff-only"]
+        git_pull = run_command(command)
+        command = local["git"]["rev-parse", "HEAD"]
+        new_head = run_command(command)
+
+        remake = old_head["stdout"] != new_head["stdout"]
+        result = {
+            "old_head": old_head,
+            "git_pull": git_pull,
+            "new_head": new_head,
+            "remake": remake,
+        }
+
+        if remake:
+            command = local["make"]["clean"]
+            make_clean = run_command(command)
+            result["make_clean"] = make_clean
+            command = local["make"]["install-world-bin", "-j"]
+            make_install = run_command(command)
+            result["make_install"] = make_install
+            # TODO(WAN): hack, but otherwise old config will load old .so.
+            #   Clean way is probably require all extensions to be installed at the start of expt run.
+            with tmp_cwd(get_nyoom_dir()):
+                command = local["make"]["install", "-j"]
+                result["make_nyoom"] = run_command(command)
+
+        return result
+
+
 @postgres.route("/configure/", methods=["POST"])
 def configure():
     build_type = "release"

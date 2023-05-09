@@ -1,10 +1,3 @@
-networks:
-  default:
-    ipam:
-      config:
-        - subnet: 192.168.1.0/16
-          gateway: 192.168.1.1
-
 services:
   gym_db:
     container_name: "dbgym-gym_db"
@@ -12,8 +5,6 @@ services:
       POSTGRES_DB: "${GYM_DB_NAME}"
       POSTGRES_PASSWORD: "${GYM_DB_PASS}"
       POSTGRES_USER: "${GYM_DB_USER}"
-    networks:
-      - default
     ports:
       - "5432:5432"
     image: "postgres:15"
@@ -37,8 +28,6 @@ services:
       TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
       TRAINER_PG_USER: "${TRAINER_PG_USER}"
     init: true
-    networks:
-      - default
     ports:
       - "${TRAINER_PORT}:${TRAINER_PORT}"
       - "${TRAINER_PG_PORT}:${TRAINER_PG_PORT}"
@@ -47,7 +36,7 @@ services:
       - "trainer:/trainer"
       - "tpch_sf1:/tpch_sf1"
       - "tpch_sf10:/tpch_sf10"
-      - "tpch_sf100:/tpch_sf100"
+#      - "tpch_sf100:/tpch_sf100"
       - "/tmp/:/tmp/"
 
   monitor:
@@ -61,8 +50,6 @@ services:
       GYM_DB_PASS: "${GYM_DB_PASS}"
       GYM_DB_USER: "${GYM_DB_USER}"
       MONITOR_PORT: "${MONITOR_PORT}"
-    networks:
-      - default
     ports:
       - "${MONITOR_PORT}:${MONITOR_PORT}"
 
@@ -83,8 +70,6 @@ services:
       TRAINER_PG_USER: "${TRAINER_PG_USER}"
       MONITOR_PORT: "${MONITOR_PORT}"
       NYOOM_PORT: "${NYOOM_PORT}"
-    networks:
-      - default
     ports:
       - "${NYOOM_PORT}:${NYOOM_PORT}"
     volumes:
@@ -107,8 +92,6 @@ services:
       TRAINER_PG_PASS: "${TRAINER_PG_PASS}"
       TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
       TRAINER_PG_USER: "${TRAINER_PG_USER}"
-    networks:
-      - default
     volumes:
       - "dbgym:/dbgym"
       - "tpch_queries:/tpch_queries"
@@ -127,7 +110,7 @@ volumes:
     external: true
   tpch_sf10:
     external: true
-  tpch_sf100:
-    external: true
+#  tpch_sf100:
+#    external: true
   tpch_queries:
     external: true

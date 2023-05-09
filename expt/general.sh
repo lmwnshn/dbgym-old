@@ -32,6 +32,7 @@ sudo apt install make gcc
 
 docker compose down --remove-orphans
 docker compose --profile gym --profile nyoom build
+#docker compose up
 docker compose --profile gym --profile nyoom up --exit-code-from dbgym
 
 docker compose down --remove-orphans

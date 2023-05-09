@@ -67,7 +67,7 @@ class DbGymEnv(gymnasium.Env):
 
         with self._engine.connect() as conn:
             for sql in self.setup_sqls:
-                conn.execute(text(sql))
+                results = conn.execute(text(sql))
             for workload in tqdm(self.workloads, desc=f"{self.name}: Iterating over workloads.", leave=None):
                 for sql_text in tqdm(workload.queries, desc=f"{self.name}: Running queries in workload.", leave=None):
                     query_num += 1
