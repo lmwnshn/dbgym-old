@@ -10,7 +10,7 @@ echo '/tmp/core.%h.%e.%t' | sudo tee /proc/sys/kernel/core_pattern
 
 IS_DEV_MACHINE=0
 if [[ "$(hostname --all-fqdns)" == *"db.pdl.local.cmu.edu"* ]]; then
-  if ! docker info | grep "Docker Root Dir: /mnt/nvme0n1"; then
+  if ! docker info | grep "Docker Root Dir: /mnt/nvme1n1"; then
     echo "Please set up the nvme drive on the dev machines: 'sudo ./setup/docker/pdl.sh'"
     exit 1
   fi
@@ -18,7 +18,7 @@ if [[ "$(hostname --all-fqdns)" == *"db.pdl.local.cmu.edu"* ]]; then
 fi
 
 if [[ ${IS_DEV_MACHINE} -eq 1 ]]; then
-  export DOCKER_DATA_ROOT="/mnt/nvme0n1/docker"
+  export DOCKER_DATA_ROOT="/mnt/nvme1n1/docker"
 else
   export DOCKER_DATA_ROOT="/var/lib/docker"
 fi

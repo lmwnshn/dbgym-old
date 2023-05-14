@@ -147,17 +147,17 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
 
     def generate(self, result_dict: dict, query_num: int, observation_idx: int, sql: str) -> list:
         plan_dict = result_dict["Plan"]
-        self._annotate_real_actual_total_time(plan_dict)
+        self._annotate_differenced_times(plan_dict)
         query_hash = self._featurize_query_hash(plan_dict)
         return self._generate(plan_dict, query_num, query_hash, observation_idx, sql, result_dict)
 
-    def _annotate_real_actual_total_time(self, plan_dict):
+    def _annotate_differenced_times(self, plan_dict):
         # https://www.pgmustard.com/blog/calculating-per-operation-times-in-postgres-explain-analyze
         # https://www.pgmustard.com/docs/explain/actual-total-time
         children_times = []
         for child in plan_dict.get("Plans", []):
-            self._annotate_real_actual_total_time(child)
-            children_times.append(child["Real Actual Total Time (ms)"])
+            self._annotate_differenced_times(child)
+            children_times.append(child["Intermediate Differenced Time (ms)"])
 
         operator_w_children = plan_dict["Actual Total Time"] * plan_dict["Actual Loops"]
         if "Workers" in plan_dict:
@@ -176,7 +176,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             else:
                 # Just use the average reported time.
                 operator_w_children = plan_dict["Actual Total Time"]
-        plan_dict["Real Actual Total Time (ms)"] = operator_w_children
+        plan_dict["Intermediate Differenced Time (ms)"] = operator_w_children
 
     def _generate(self, plan_dict, query_num, query_hash, observation_idx, sql, result_dict) -> list:
         observations = []
@@ -207,9 +207,9 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             #  and it is not core to the research questions being addressed by the gym, so here we go.
             #  We also bias to make ourselves worse (we try to never report an aggregated time longer than the real
             #  runtime), which is the opposite of what some other people do (they force parent >= sum(children)).
-            differenced_time = _plan_dict["Real Actual Total Time (ms)"]
+            differenced_time = _plan_dict["Intermediate Differenced Time (ms)"]
             for child in _plan_dict.get("Plans", []):
-                differenced_time -= child["Real Actual Total Time (ms)"]
+                differenced_time -= child["Intermediate Differenced Time (ms)"]
             return max(differenced_time, 0)
 
         def convert_string_array(s, dtype=np.float32):
@@ -228,6 +228,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             ("Actual Total Time (ms)", self._singleton(plan_dict["Actual Total Time"])),
             ("Children Observation Indexes", output_children_observation_indexes),
             ("Differenced Time (ms)", self._singleton(get_differenced_time(plan_dict))),
+            ("Execution Time (ms)", self._singleton(result_dict["Execution Time"])),
             ("Features", self._featurize(plan_dict)),
             ("Node Type", self._one_hot(self._node_types, plan_dict, "Node Type")),
             ("Nyoom Tuple Times (us)", nyoom_tuple_times_us),

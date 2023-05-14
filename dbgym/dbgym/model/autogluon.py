@@ -10,6 +10,7 @@ class AutogluonModel:
     def __init__(self, save_path: Path, predictor_target):
         self.save_path: Path = save_path
         self.predictor_target = predictor_target
+        self.unit = self.predictor_target.split(" ")[-1]
         self.predictor: TabularPredictor = TabularPredictor(label=self.predictor_target, path=str(self.save_path))
 
     def try_load(self) -> bool:
@@ -20,24 +21,23 @@ class AutogluonModel:
         except FileNotFoundError:
             return False
 
-    def _featurize(self, dataset):
-        dataset = dataset[["Node Type", "Features", self.predictor_target]]
-        return dataset
-
     def train(self, dataset: TabularDataset, time_limit=Config.AUTOGLUON_TIME_LIMIT_S):
-        self.predictor.fit(self._featurize(dataset), time_limit=time_limit)
+        print("Training:", dataset.columns)
+        self.predictor.fit(dataset, time_limit=time_limit)
         pd.Series({"Training Time (s)": time_limit}).to_pickle(self.save_path / "training_time.pkl")
         self.predictor.save()
 
     def eval(self, dataset: TabularDataset) -> pd.DataFrame:
-        y_pred = self.predictor.predict(self._featurize(dataset))
+        eval_dataset = dataset.drop(columns=[self.predictor_target])
+        print("Eval:", eval_dataset.columns)
+        y_pred = self.predictor.predict(eval_dataset)
         eval_df = pd.concat([y_pred, dataset[self.predictor_target]], axis=1)
-        eval_df.columns = ["Predicted", "Actual"]
-        eval_df["Diff"] = (eval_df["Predicted"] - eval_df["Actual"]).abs()
+        eval_df.columns = [f"Predicted {self.unit}", f"Actual {self.unit}"]
+        eval_df[f"Diff {self.unit}"] = (eval_df[f"Predicted {self.unit}"] - eval_df[f"Actual {self.unit}"]).abs()
         eval_df["q_err"] = np.nan_to_num(
             np.maximum(
-                eval_df["Predicted"] / eval_df["Actual"],
-                eval_df["Actual"] / eval_df["Predicted"],
+                eval_df[f"Predicted {self.unit}"] / eval_df[f"Actual {self.unit}"],
+                eval_df[f"Actual {self.unit}"] / eval_df[f"Predicted {self.unit}"],
             ),
             nan=np.inf,
         )

@@ -224,7 +224,7 @@ def prepare():
 def gym(name, db_snapshot_path, workloads, setup_sqls=None, seed=15721, overwrite=True):
     if setup_sqls is None:
         setup_sqls = []
-
+    # setup_sqls.append("set max_parallel_workers_per_gather = 0")
     db_snapshot = DatabaseSnapshot.from_file(db_snapshot_path)
 
     # Run the queries in the gym.
@@ -476,7 +476,7 @@ def generate_seqscan_data():
             ]
 
             expt_name = f"seqscan_lineitem_tws{tws}_ttc{ttc}"
-            gym(expt_name, db_snapshot_path, workload, setup_sqls=setup_sqls, seed=seed, overwrite=True)
+            gym(expt_name, db_snapshot_path, workload, setup_sqls=setup_sqls, seed=seed, overwrite=False)
 
             engine = create_engine(
                 Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
@@ -490,7 +490,7 @@ def generate_seqscan_data():
             assert req.status_code == 200
             print("nyoom_start: ", req.text)
             expt_name = f"seqscan_lineitem_tws{tws}_ttc{ttc}_nyoom"
-            gym(expt_name, db_snapshot_path, workload, setup_sqls=setup_sqls, seed=seed, overwrite=True)
+            gym(expt_name, db_snapshot_path, workload, setup_sqls=setup_sqls, seed=seed, overwrite=False)
             req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
             assert req.status_code == 200
             print("nyoom_stop: ", req.text)
@@ -627,7 +627,8 @@ class Plot:
 
     @staticmethod
     def read_runtime(_expt_name: str) -> float:
-        return pd.read_pickle(Config.SAVE_PATH_OBSERVATION / _expt_name / "runtime.pkl")["Runtime (s)"]
+        df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / _expt_name / "0.parquet")
+        return df.groupby(["Query Num"]).first()["Execution Time (ms)"].sum()
 
     @staticmethod
     def read_training_time(_expt_name: str) -> float:
@@ -655,7 +656,7 @@ class Plot:
                 training_time_s.append(0)
             else:
                 metrics = Plot.load_model_eval(expt_name)
-                mae_s.append(metrics["diff (ms)"].mean() / 1e3)
+                mae_s.append(metrics["Diff (ms)"].mean() / 1e3)
                 if expt_name == "tablesample_hack":
                     runtime_s.append(Plot.read_runtime("tablesample"))
                 else:
@@ -701,7 +702,7 @@ class Plot:
         index = []
         for expt_name, index_name in labeled_expt:
             metrics = Plot.load_model_eval(expt_name)
-            mae_s.append(metrics["diff (ms)"].mean() / 1e3)
+            mae_s.append(metrics["Diff (ms)"].mean() / 1e3)
             runtime_s.append(Plot.read_runtime("default"))
             training_time_s.append(Plot.read_training_time(expt_name))
             index.append(index_name)
@@ -728,7 +729,7 @@ class Plot:
         index = []
         for expt_name, index_name in labeled_expt:
             metrics = Plot.load_model_eval(expt_name)
-            mae_s.append(metrics["diff (ms)"].mean() / 1e3)
+            mae_s.append(metrics["Diff (ms)"].mean() / 1e3)
             runtime_s.append(Plot.read_runtime("default"))
             training_time_s.append(Plot.read_training_time(expt_name))
             index.append(index_name)
@@ -756,21 +757,7 @@ class Plot:
         ax.set_ylabel("Time (ms)")
         ax.set_xlabel("Operator Type")
         plt.tight_layout()
-        plt.savefig(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator_HACK.pdf")
-
-    @staticmethod
-    def generate_tpch_runtime_by_operator_HACK():
-        default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
-        nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
-
-        default_sums = default_df.groupby("Node Type")["Differenced Time (ms)"].sum()
-        nyoom_sums = nyoom_df.groupby("Node Type")["Differenced Time (ms)"].sum()
-
-        plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
-        ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
-        ax.set_ylabel("Time (ms)")
-        ax.set_xlabel("Operator Type")
-        plt.tight_layout()
+        Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
         plt.savefig(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator_HACK.pdf")
 
     @staticmethod
@@ -786,6 +773,7 @@ class Plot:
         ax.set_ylabel("Time (ms)")
         ax.set_xlabel("Operator Type")
         plt.tight_layout()
+        Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
         plt.savefig(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator.pdf")
 
 
@@ -793,7 +781,7 @@ def main():
     pass
     generate_data()
     Model.generate_model()
-    # Plot.generate_plot()
+    Plot.generate_plot()
     # Model.generate_model_sweep_tpch()
     # Plot.generate_plot_sweep_tpch()
     # Model.generate_model_noise_tpch()

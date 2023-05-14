@@ -132,6 +132,7 @@ def pull_maybe_remake():
             "git_pull": git_pull,
             "new_head": new_head,
             "remake": remake,
+            "git_hash": new_head["stdout"],
         }
 
         if remake:
@@ -144,8 +145,10 @@ def pull_maybe_remake():
             # TODO(WAN): hack, but otherwise old config will load old .so.
             #   Clean way is probably require all extensions to be installed at the start of expt run.
             with tmp_cwd(get_nyoom_dir()):
+                command = local["make"]["clean"]
+                result["make_clean_nyoom"] = run_command(command)
                 command = local["make"]["install", "-j"]
-                result["make_nyoom"] = run_command(command)
+                result["make_install_nyoom"] = run_command(command)
 
         return result
 
