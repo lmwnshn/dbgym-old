@@ -118,6 +118,11 @@ def clone():
 
 @postgres.route("/pull_maybe_remake/", methods=["POST"])
 def pull_maybe_remake():
+    if not get_pg_dir().exists():
+        result = {
+            "remake": False,
+        }
+        return result
     with tmp_cwd(get_pg_dir()):
         command = local["git"]["rev-parse", "HEAD"]
         old_head = run_command(command)

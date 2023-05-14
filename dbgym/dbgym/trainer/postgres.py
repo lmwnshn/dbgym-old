@@ -66,7 +66,8 @@ class PostgresTrainer(BaseTrainer):
         print("dbms_pull_maybe_remake")
         result = requests.post(self._service_url + "/postgres/pull_maybe_remake/")
         result_json = result.json()
-        print("dbms_git_hash", result_json["git_hash"].strip())
+        if "git_hash" in result_json:
+            print("dbms_git_hash", result_json["git_hash"].strip())
         return result_json["remake"]
 
     def dbms_install_nyoom(self):
