@@ -206,7 +206,7 @@ def vacuum_analyze_all():
     inspector: Inspector = inspect(engine)
     with engine.connect() as conn:
         for table in inspector.get_table_names():
-            _exec(conn, f"VACUUM ANALYZE {table}")
+            _exec(conn, f"VACUUM FULL ANALYZE {table}")
     engine.dispose()
 
 

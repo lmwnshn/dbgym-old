@@ -114,6 +114,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
                 spaces.Box(low=0, high=np.inf, dtype=np.int64, seed=seed), seed=seed
             ),
             "Differenced Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
+            "Execution Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
             "Features": spaces.Sequence(
                 spaces.Box(low=-np.inf, high=np.inf, dtype=np.float32, seed=seed),
                 seed=seed,
@@ -220,6 +221,8 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
         nyoom_tuple_sizes = convert_string_array(plan_dict.get("Nyoom Tuple Sizes", []), dtype=np.int32)
         nyoom_secondary_times_us = convert_string_array(plan_dict.get("Nyoom Secondary Times (us)", []))
         nyoom_secondary_sizes = convert_string_array(plan_dict.get("Nyoom Secondary Sizes", []), dtype=np.int32)
+
+        print(plan_dict.keys())
 
         ordered_dict_items = [
             ("Actual Loops", self._singleton(plan_dict["Actual Loops"])),
