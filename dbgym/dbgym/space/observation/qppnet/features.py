@@ -222,7 +222,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
         nyoom_secondary_times_us = convert_string_array(plan_dict.get("Nyoom Secondary Times (us)", []))
         nyoom_secondary_sizes = convert_string_array(plan_dict.get("Nyoom Secondary Sizes", []), dtype=np.int32)
 
-        print(plan_dict.keys())
+        # print(plan_dict.keys())
 
         ordered_dict_items = [
             ("Actual Loops", self._singleton(plan_dict["Actual Loops"])),
