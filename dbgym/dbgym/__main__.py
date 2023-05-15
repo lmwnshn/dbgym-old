@@ -206,7 +206,8 @@ def vacuum_analyze_all():
     inspector: Inspector = inspect(engine)
     with engine.connect() as conn:
         for table in inspector.get_table_names():
-            _exec(conn, f"VACUUM FULL ANALYZE {table}")
+            # _exec(conn, f"VACUUM FULL ANALYZE {table}")
+            _exec(conn, f"VACUUM ANALYZE {table}")
     engine.dispose()
 
 
@@ -409,10 +410,6 @@ def generate_data():
             db_snapshot.to_file(db_snapshot_path)
             print("Snapshot: complete.")
 
-        gym("test", db_snapshot_path, test_workloads, seed=seed, overwrite=False)
-        gym("default", db_snapshot_path, default_workloads, seed=seed, overwrite=False)
-        gym("tablesample", db_snapshot_path, tablesample_workloads, seed=seed, overwrite=False)
-
         engine = create_engine(
             Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
         )
@@ -420,11 +417,15 @@ def generate_data():
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS nyoom"))
         engine.dispose()
 
+        setup_sqls = ["CREATE EXTENSION IF NOT EXISTS nyoom"]
+        gym("test", db_snapshot_path, test_workloads, seed=seed, setup_sqls=setup_sqls, overwrite=False)
+        gym("default", db_snapshot_path, default_workloads, seed=seed, setup_sqls=setup_sqls, overwrite=False)
+        gym("tablesample", db_snapshot_path, tablesample_workloads, seed=seed, setup_sqls=setup_sqls, overwrite=False)
+
         req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
         req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
         assert req.status_code == 200
         print("nyoom_start: ", req.text)
-        setup_sqls = ["CREATE EXTENSION IF NOT EXISTS nyoom"]
         gym("default_with_nyoom", db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed,
             overwrite=False)
         req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
@@ -765,8 +766,8 @@ class Plot:
         default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
         nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
 
-        default_sums = default_df.groupby("Node Type")["Real Actual Total Time (ms)"].sum()
-        nyoom_sums = nyoom_df.groupby("Node Type")["Real Actual Total Time (ms)"].sum()
+        default_sums = default_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
+        nyoom_sums = nyoom_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
 
         plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
         ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])

@@ -15,6 +15,8 @@ services:
   trainer:
     build:
       context: "trainer"
+    cap_add:
+      - SYS_PTRACE
     container_name: "dbgym-trainer"
     depends_on:
       - "gym_db"

@@ -137,8 +137,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             "Query Num": spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed),
             "Query Plan": spaces.Text(max_length=1000000000, seed=seed),
             "Query Text": spaces.Text(max_length=100000, seed=seed),
-            # TODO(WAN): small joke, real is as real as the actual is actual. Best-effort real, if you will.
-            "Real Actual Total Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
+            "Nyoom Differenced Total Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
         }
         explain_space = spaces.Dict(spaces=space_dict, seed=seed)
         super().__init__(space=explain_space, seed=seed)
@@ -243,7 +242,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             ("Query Num", self._singleton(query_num, dtype=np.int32)),
             ("Query Plan", json.dumps(result_dict)),
             ("Query Text", sql),
-            ("Real Actual Total Time (ms)", self._singleton(plan_dict["Real Actual Total Time"])),
+            ("Nyoom Differenced Total Time (ms)", self._singleton(plan_dict["Nyoom Differenced Total Time (ms)"])),
         ]
         observations.append(OrderedDict(ordered_dict_items))
         return observations
