@@ -781,8 +781,8 @@ class Plot:
 def main():
     pass
     generate_data()
-    Model.generate_model()
-    Plot.generate_plot()
+    # Model.generate_model()
+    # Plot.generate_plot()
     # Model.generate_model_sweep_tpch()
     # Plot.generate_plot_sweep_tpch()
     # Model.generate_model_noise_tpch()

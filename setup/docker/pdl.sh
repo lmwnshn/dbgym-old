@@ -8,7 +8,7 @@ fi
 mkdir -p /etc/docker/
 cat > /etc/docker/daemon.json <<EOF
 {
-    "data-root": "/mnt/nvme1n1/docker/"
+    "data-root": "/mnt/nvme0n1/docker/"
 }
 EOF
 
