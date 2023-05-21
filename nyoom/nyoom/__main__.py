@@ -46,11 +46,14 @@ def main():
         trainer_engine.dispose()
 
         installed = False
+        max_id = None
         while not installed:
             try:
                 print("Installing nyoom.")
                 for sql in setup_sqls:
                     gym_conn.execute(text(sql))
+                result = gym_conn.execute(text("SELECT max(id) FROM nyoom_results"))
+                max_id = result.scalar_one()
                 installed = True
                 print("Installed nyoom.")
             except SQLAlchemyError as e:
@@ -92,7 +95,7 @@ def main():
                             select_sql = text(
                                 f"""
                                 SELECT ts, pid, token, plan FROM nyoom_results
-                                WHERE pid = {active_pid} AND token={token}
+                                WHERE pid = {active_pid} AND token={token} AND id>{max_id}
                                 ORDER BY id DESC
                                 LIMIT 3
                                 """
