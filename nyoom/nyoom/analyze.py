@@ -15,7 +15,7 @@ class Analyze:
         new: Analyze = new
         result = {}
 
-        assert old._dict.keys() == new._dict.keys()
+        assert old._dict.keys() == new._dict.keys(), f"Old:{old._dict.keys()}\nNew:{new._dict.keys()}"
         plan_node_ids = list(old._dict.keys())
         for plan_node_id in plan_node_ids:
             result[plan_node_id] = {}
