@@ -107,7 +107,8 @@ def main():
                             for ts, pid, token, plan in active_results:
                                 analyze = Analyze(relname_reltuples_map, indexname_tablename_map, plan)
                                 try:
-                                    analyze.compute_bounds()
+                                    # TODO(WAN): We no longer use these bounds.
+                                    # analyze.compute_bounds()
                                     analyzes.append(analyze)
                                 except Exception as e:
                                     filename = f"/nyoom/{pid}-{ts}.png"
