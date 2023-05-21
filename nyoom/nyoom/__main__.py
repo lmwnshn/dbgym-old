@@ -111,7 +111,7 @@ def main():
                                     analyze.viz(filename)
                                     print(f"Error computing bounds, see: {filename}\n")
                                     with open(f"/nyoom/{pid}-{ts}-traceback.txt", "w") as f:
-                                        traceback.print_exception(e, file=f)
+                                        traceback.print_exc(file=f)
                                     with open(f"/nyoom/{pid}-{ts}-plan.json", "w") as f:
                                         print(plan, file=f)
 
