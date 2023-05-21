@@ -425,6 +425,11 @@ def generate_data():
         req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
         req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
         assert req.status_code == 200
+        setup_sqls = [
+            "CREATE EXTENSION IF NOT EXISTS nyoom",
+            f"SET nyoom.telemetry_window_size = 10000",
+            f"SET nyoom.telemetry_tuple_count = 50000",
+        ]
         print("nyoom_start: ", req.text)
         gym("default_with_nyoom", db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed,
             overwrite=False)

@@ -263,35 +263,35 @@ class Analyze:
                         relname = node["Relation Name"]
                     num_tuples = self._relname_reltuples_map[relname]
                     if any([x in node for x in ["Filter", "Index Cond", "Recheck Cond"]]):
-                        bounds[plan_node_id]["min"] = node["Tuples Processed"]
+                        bounds[plan_node_id]["min"] = node["Nyoom Tuples Processed"]
                         bounds[plan_node_id]["max"] = num_tuples
                     else:
                         bounds[plan_node_id]["min"] = num_tuples
                         bounds[plan_node_id]["max"] = num_tuples
                 elif node_type == "Sort":
                     child = self._get_node(self._get_child(plan_node_id, "Outer"))
-                    bounds[plan_node_id]["min"] = child["Tuples Processed"]
+                    bounds[plan_node_id]["min"] = child["Nyoom Tuples Processed"]
                     bounds[plan_node_id]["max"] = bounds[child["Plan Node Id"]]["max"]
                 elif node_type == "Aggregate":
                     child = self._get_only_child(plan_node_id)
-                    bounds[plan_node_id]["min"] = max(1, node["Tuples Processed"])
+                    bounds[plan_node_id]["min"] = max(1, node["Nyoom Tuples Processed"])
                     bounds[plan_node_id]["max"] = bounds[child["Plan Node Id"]]["max"] - max(
-                        1, node["Tuples Processed"]
+                        1, node["Nyoom Tuples Processed"]
                     )
                 elif node_type in ["Hash Join", "Merge Join", "Nested Loop"]:
                     outer = self._get_node(self._get_child(plan_node_id, "Outer"))
                     inner = self._get_node(self._get_child(plan_node_id, "Inner"))
-                    bounds[plan_node_id]["min"] = node["Tuples Processed"]
+                    bounds[plan_node_id]["min"] = node["Nyoom Tuples Processed"]
                     bounds[plan_node_id]["max"] = (
-                        bounds[outer["Plan Node Id"]]["max"] - outer["Tuples Processed"]
-                    ) * bounds[inner["Plan Node Id"]]["max"] + node["Tuples Processed"]
+                        bounds[outer["Plan Node Id"]]["max"] - outer["Nyoom Tuples Processed"]
+                    ) * bounds[inner["Plan Node Id"]]["max"] + node["Nyoom Tuples Processed"]
                 elif node_type in ["Hash"]:
                     child = self._get_only_child(plan_node_id)
-                    bounds[plan_node_id]["min"] = node["Tuples Processed"]
+                    bounds[plan_node_id]["min"] = node["Nyoom Tuples Processed"]
                     bounds[plan_node_id]["max"] = bounds[child["Plan Node Id"]]["max"]
                 elif node_type == "Limit":
                     child = self._get_only_child(plan_node_id)
-                    bounds[plan_node_id]["min"] = child["Tuples Processed"]
+                    bounds[plan_node_id]["min"] = child["Nyoom Tuples Processed"]
                     bounds[plan_node_id]["max"] = min(node["Plan Rows"], bounds[child["Plan Node Id"]]["max"])
                 elif node_type in ["Gather", "Gather Merge"]:
                     # TODO(WAN): do I know what I'm doing?
@@ -301,10 +301,10 @@ class Analyze:
                     bounds[plan_node_id]["max"] = bounds[child["Plan Node Id"]]["max"] * n_workers
                 elif node_type == "Subquery Scan":
                     child = self._get_only_child(plan_node_id)
-                    bounds[plan_node_id]["min"] = node["Tuples Processed"]
+                    bounds[plan_node_id]["min"] = node["Nyoom Tuples Processed"]
                     bounds[plan_node_id]["max"] = bounds[child["Plan Node Id"]]["max"]
                 elif node_type == "Materialize":
-                    bounds[plan_node_id]["min"] = node["Tuples Processed"]
+                    bounds[plan_node_id]["min"] = node["Nyoom Tuples Processed"]
                     # TODO(WAN): ?!
                     if node["Parent Relationship"] == "Inner":
                         child = self._get_only_child(plan_node_id)
@@ -326,7 +326,7 @@ class Analyze:
         victims = []
         for driver in self._drivers:
             node = self._dict[driver]
-            processed = node["Tuples Processed"]
+            processed = node["Nyoom Tuples Processed"]
             estimated_total = node["Plan Rows"]
             progress = processed / estimated_total * 100
             if progress < cutoff_pct:
@@ -373,7 +373,7 @@ class Analyze:
             node = self._dict[plan_node_id]
             node_type = node["Node Type"]
             pipeline_id = self._pipelines.get(plan_node_id, "INVALID")
-            tuples_processed = node["Tuples Processed"]
+            tuples_processed = node["Nyoom Tuples Processed"]
             tuples_total_estimate = node["Plan Rows"]
             progress_estimate = round((tuples_processed / tuples_total_estimate) * 100, 2)
             bounds_min = self._bounds[plan_node_id]["min"]
