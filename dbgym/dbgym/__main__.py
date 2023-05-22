@@ -116,6 +116,47 @@ def fig_full():
     # TODO(WAN): yet to make a full figure.
 
 
+nyoom_configs = [
+    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 0},
+    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 1000},
+    {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 0},
+    {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 1000},
+    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 0},
+    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 1000},
+    {"method": "tskip", "tskip_wiggle_std": 1.0, "tskip_wiggle_sampen": 20},
+    {"method": "tskip", "tskip_wiggle_std": 1.5, "tskip_wiggle_sampen": 20},
+    {"method": "tskip", "tskip_wiggle_std": 2.0, "tskip_wiggle_sampen": 20},
+    {"method": "tskip", "tskip_wiggle_std": 2.5, "tskip_wiggle_sampen": 20},
+    {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 20},
+    {"method": "tskip", "tskip_wiggle_std": 2.5, "tskip_wiggle_sampen": 50},
+    {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 50},
+]
+tws_ttc = [
+    (10000, 10000),
+    (10000, 25000),
+    (10000, 50000),
+    (10000, 75000),
+    (10000, 100000),
+]
+
+
+def get_experiment_name(tws, ttc, nc):
+    name = f"nyoom_tws_{tws}_ttc_{ttc}_method_{nc['method']}"
+    if nc["method"] == "tskip":
+        name = name + f"_std_{nc['tskip_wiggle_std']}_sampen_{nc['tskip_wiggle_sampen']}"
+    elif nc["method"] == "optimizer":
+        name = name + f"_cutoff_{nc['optimizer_cutoff_pct']}_mp_{nc['optimizer_min_processed']}"
+    return name
+
+
+def get_experiment_names():
+    names = []
+    for (tws, ttc) in tws_ttc:
+        for nc in nyoom_configs:
+            names.append(get_experiment_name(tws, ttc, nc))
+    return names
+
+
 def _exec(conn: Connection, sql: str, verbose=True):
     if verbose:
         print(sql)
@@ -422,20 +463,23 @@ def generate_data():
         gym("default", db_snapshot_path, default_workloads, seed=seed, setup_sqls=setup_sqls, overwrite=False)
         gym("tablesample", db_snapshot_path, tablesample_workloads, seed=seed, setup_sqls=setup_sqls, overwrite=False)
 
-        req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
-        req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
-        assert req.status_code == 200
-        setup_sqls = [
-            "CREATE EXTENSION IF NOT EXISTS nyoom",
-            f"SET nyoom.telemetry_window_size = 10000",
-            f"SET nyoom.telemetry_tuple_count = 50000",
-        ]
-        print("nyoom_start: ", req.text)
-        gym("default_with_nyoom", db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed,
-            overwrite=False)
-        req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
-        assert req.status_code == 200
-        print("nyoom_stop: ", req.text)
+        for (tws, ttc) in tws_ttc:
+            for nc in nyoom_configs:
+                name = get_experiment_name(tws, ttc, nc)
+
+                req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
+                req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
+                assert req.status_code == 200
+                setup_sqls = [
+                    "CREATE EXTENSION IF NOT EXISTS nyoom",
+                    f"SET nyoom.telemetry_window_size = {tws}",
+                    f"SET nyoom.telemetry_tuple_count = {ttc}",
+                ]
+                print("nyoom_start: ", req.text)
+                gym(name, db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed, overwrite=False)
+                req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
+                assert req.status_code == 200
+                print("nyoom_stop: ", req.text)
 
 
 def generate_seqscan_data():
@@ -522,17 +566,21 @@ class Model:
         test_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "test" / "0.parquet")
         default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
         tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
-        default_with_nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
+
+        names = get_experiment_names()
+        nyoom_dfs = []
+        for name in names:
+            nyoom_dfs.append(pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet"))
 
         # tablesample_hack_df = tablesample_df.copy()
         # tablesample_hack_df["Node Type"] = tablesample_hack_df["Node Type"].replace({"Sample Scan": "Seq Scan"})
+        # Model.save_model_eval("tablesample_hack", tablesample_hack_df, tablesample_hack_data, test_data, predictor_target=predictor_target)
 
         data_dfs = [
             test_df,
             default_df,
             tablesample_df,
-            # tablesample_hack_df,
-            default_with_nyoom_df
+            *nyoom_dfs,
         ]
         for i, df in enumerate(data_dfs):
             print("Data", i, df.shape)
@@ -542,16 +590,14 @@ class Model:
         (test_data,
          default_data,
          tablesample_data,
-         # tablesample_hack_data,
-         default_with_nyoom_data) \
+         *nyoom_datas) \
             = autogluon_dfs
 
         Model.save_model_eval("default", default_df, default_data, test_data, predictor_target=predictor_target)
         Model.save_model_eval("tablesample", tablesample_df, tablesample_data, test_data,
                               predictor_target=predictor_target)
-        # Model.save_model_eval("tablesample_hack", tablesample_hack_df, tablesample_hack_data, test_data, predictor_target=predictor_target)
-        Model.save_model_eval("default_with_nyoom", default_with_nyoom_df, default_with_nyoom_data, test_data,
-                              predictor_target=predictor_target)
+        for name, (nyoom_df, nyoom_data) in zip(names, zip(nyoom_dfs, nyoom_datas)):
+            Model.save_model_eval(name, nyoom_df, nyoom_data, test_data, predictor_target=predictor_target)
 
     @staticmethod
     def generate_model_noise_tpch():
@@ -642,56 +688,60 @@ class Plot:
 
     @staticmethod
     def generate_plot():
-        labeled_expt = [
-            # (code name, plot name)
-            ("default", "Default"),
-            ("tablesample", "Sample"),
-            # ("tablesample_hack", "SampleHack"),
-            ("default_with_nyoom", "TSkip"),
-        ]
+        names = get_experiment_names()
 
-        mae_s = []
-        runtime_s = []
-        training_time_s = []
-        index = []
-        for expt_name, index_name in labeled_expt:
-            if expt_name is None:
-                # TODO(WAN): temporary hack until we get those working.
-                mae_s.append(0)
-                runtime_s.append(0)
-                training_time_s.append(0)
-            else:
-                metrics = Plot.load_model_eval(expt_name)
-                mae_s.append(metrics["Diff (ms)"].mean() / 1e3)
-                if expt_name == "tablesample_hack":
-                    runtime_s.append(Plot.read_runtime("tablesample"))
+        for name in names:
+            labeled_expt = [
+                # (code name, plot name)
+                ("default", "Default"),
+                ("tablesample", "Sample"),
+                # ("tablesample_hack", "SampleHack"),
+                # ("default_with_nyoom", "TSkip"),
+                (name, name),
+            ]
+
+            mae_s = []
+            runtime_s = []
+            training_time_s = []
+            index = []
+            for expt_name, index_name in labeled_expt:
+                if expt_name is None:
+                    # TODO(WAN): temporary hack until we get those working.
+                    mae_s.append(0)
+                    runtime_s.append(0)
+                    training_time_s.append(0)
                 else:
-                    runtime_s.append(Plot.read_runtime(expt_name))
-                training_time_s.append(Plot.read_training_time(expt_name))
-            index.append(index_name)
+                    metrics = Plot.load_model_eval(expt_name)
+                    mae_s.append(metrics["Diff (ms)"].mean() / 1e3)
+                    if expt_name == "tablesample_hack":
+                        runtime_s.append(Plot.read_runtime("tablesample"))
+                    else:
+                        runtime_s.append(Plot.read_runtime(expt_name))
+                    training_time_s.append(Plot.read_training_time(expt_name))
+                index.append(index_name)
 
-        Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
-        fig_half()
-        fig, ax = plt.subplots(1, 1)
-        df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
-        ax = df.plot.bar(ax=ax, rot=0, legend=False)
-        ax.set_ylabel("Mean Absolute Error (s)")
-        fig.savefig(Config.SAVE_PATH_PLOT / f"accuracy.pdf")
-        plt.close(fig)
+            Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
+            fig_half()
+            fig, ax = plt.subplots(1, 1)
+            df = pd.DataFrame({"MAE (s)": mae_s}, index=index)
+            ax = df.plot.bar(ax=ax, rot=0, legend=False)
+            ax.set_ylabel("Mean Absolute Error (s)")
+            fig.savefig(Config.SAVE_PATH_PLOT / f"accuracy_{name}.pdf")
+            plt.close(fig)
 
-        fig_half()
-        fig, ax = plt.subplots(1, 1)
-        df = pd.DataFrame(
-            {
-                "Runtime (s)": runtime_s,
-                "Training Time (s)": training_time_s,
-            },
-            index=index,
-        )
-        ax = df.plot.bar(stacked=True, ax=ax, rot=0)
-        ax.set_ylabel("Time (s)")
-        fig.savefig(Config.SAVE_PATH_PLOT / f"runtime.pdf")
-        plt.close(fig)
+            fig_half()
+            fig, ax = plt.subplots(1, 1)
+            df = pd.DataFrame(
+                {
+                    "Runtime (s)": runtime_s,
+                    "Training Time (s)": training_time_s,
+                },
+                index=index,
+            )
+            ax = df.plot.bar(stacked=True, ax=ax, rot=0)
+            ax.set_ylabel("Time (s)")
+            fig.savefig(Config.SAVE_PATH_PLOT / f"runtime_{name}.pdf")
+            plt.close(fig)
 
     @staticmethod
     def generate_plot_noise_tpch():
@@ -752,42 +802,46 @@ class Plot:
 
     @staticmethod
     def generate_tpch_runtime_by_operator_HACK():
-        default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
-        nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
+        names = get_experiment_names()
+        for name in names:
+            default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+            nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
 
-        default_sums = default_df.groupby("Node Type")["Differenced Time (ms)"].sum()
-        nyoom_sums = nyoom_df.groupby("Node Type")["Differenced Time (ms)"].sum()
+            default_sums = default_df.groupby("Node Type")["Differenced Time (ms)"].sum()
+            nyoom_sums = nyoom_df.groupby("Node Type")["Differenced Time (ms)"].sum()
 
-        plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
-        ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
-        ax.set_ylabel("Time (ms)")
-        ax.set_xlabel("Operator Type")
-        plt.tight_layout()
-        Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
-        plt.savefig(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator_HACK.pdf")
+            plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
+            ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
+            ax.set_ylabel("Time (ms)")
+            ax.set_xlabel("Operator Type")
+            plt.tight_layout()
+            Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
+            plt.savefig(Config.SAVE_PATH_PLOT / f"tpch_runtime_by_operator_HACK_{name}.pdf")
 
     @staticmethod
     def generate_tpch_runtime_by_operator():
-        default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
-        nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default_with_nyoom" / "0.parquet")
+        names = get_experiment_names()
+        for name in names:
+            default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+            nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
 
-        default_sums = default_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
-        nyoom_sums = nyoom_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
+            default_sums = default_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
+            nyoom_sums = nyoom_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
 
-        plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
-        ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
-        ax.set_ylabel("Time (ms)")
-        ax.set_xlabel("Operator Type")
-        plt.tight_layout()
-        Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
-        plt.savefig(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator.pdf")
+            plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
+            ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
+            ax.set_ylabel("Time (ms)")
+            ax.set_xlabel("Operator Type")
+            plt.tight_layout()
+            Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
+            plt.savefig(Config.SAVE_PATH_PLOT / f"tpch_runtime_by_operator_{name}.pdf")
 
 
 def main():
     pass
     generate_data()
-    # Model.generate_model()
-    # Plot.generate_plot()
+    Model.generate_model()
+    Plot.generate_plot()
     # Model.generate_model_sweep_tpch()
     # Plot.generate_plot_sweep_tpch()
     # Model.generate_model_noise_tpch()

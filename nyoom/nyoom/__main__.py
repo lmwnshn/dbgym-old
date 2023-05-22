@@ -1,3 +1,4 @@
+import argparse
 import time
 import traceback
 
@@ -7,8 +8,20 @@ from sqlalchemy.exc import SQLAlchemyError
 from nyoom.analyze import Analyze
 from nyoom.config import Config
 
+CHOICES = ["tskip", "optimizer"]
+
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--method", type=str, choices=CHOICES, required=True)
+    parser.add_argument("--tskip_wiggle_std", type=float, default=2.0)
+    parser.add_argument("--tskip_wiggle_sampen", type=float, default=20)
+    parser.add_argument("--optimizer_cutoff_pct", type=float, default=10.0)
+    parser.add_argument("--optimizer_min_processed", type=float, default=0)
+    args = parser.parse_args()
+
+    print(args)
+
     gym_engine = create_engine(
         Config.SQLALCHEMY_DATABASE_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
     )
@@ -119,18 +132,26 @@ def main():
                                     with open(f"/nyoom/{pid}-{ts}-plan.json", "w") as f:
                                         print(plan, file=f)
 
-                            if len(analyzes) <= 2:
-                                # Not enough data to make a decision.
-                                continue
+                            victim_plan_node_ids = None
+                            if args.method == "tskip":
+                                if len(analyzes) < 2:
+                                    # Not enough data to make a decision.
+                                    continue
 
-                            analysis = Analyze.compare(analyzes[-2], analyzes[-1])
-                            victim_plan_node_ids = analysis["Stop These Plan Nodes"]
-
-                            # cutoff_pct = 10
-                            # min_processed = 1000
-                            # victim_plan_node_ids = analyze.get_victims(
-                            #     cutoff_pct=cutoff_pct, min_processed=min_processed
-                            # )
+                                analysis = Analyze.compare(
+                                    analyzes[-2], analyzes[-1],
+                                    wiggle_std=args.tskip_wiggle_std,
+                                    wiggle_sampen=args.tskip_wiggle_sampen,
+                                )
+                                victim_plan_node_ids = analysis["Stop These Plan Nodes"]
+                            elif args.method == "optimizer":
+                                if len(analyzes) < 1:
+                                    continue
+                                victim_plan_node_ids = analyzes[-1].get_victims(
+                                    cutoff_pct=args.optimizer_cutoff_pct,
+                                    min_processed=args.optimizer_min_processed,
+                                )
+                            assert victim_plan_node_ids is not None
 
                             print(
                                 f"Stopping {pid=} {token=}: ",

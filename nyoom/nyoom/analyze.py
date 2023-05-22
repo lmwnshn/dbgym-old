@@ -10,7 +10,7 @@ from networkx.relabel import relabel_nodes
 
 class Analyze:
     @staticmethod
-    def compare(old, new):
+    def compare(old, new, wiggle_std=2.0, wiggle_sampen=20.0):
         old: Analyze = old
         new: Analyze = new
         result = {}
@@ -58,16 +58,16 @@ class Analyze:
             mu_old = result[plan_node_id]["old-mean"]
             std_old = result[plan_node_id]["old-std"]
             mu_new = result[plan_node_id]["new-mean"]
-            within_2_std = mu_old - 2 * std_old <= mu_new <= mu_old + 2 * std_old
+            within_wiggle_std = mu_old - wiggle_std * std_old <= mu_new <= mu_old + wiggle_std * std_old
 
             sampen_old = result[plan_node_id]["old-SampEn"]
             sampen_new = result[plan_node_id]["new-SampEn"]
-            pct_tolerance = 20
+            pct_tolerance = wiggle_sampen
             if sampen_old == 0:
                 continue
             similar_entropy = abs(100 - (sampen_new / sampen_old) * 100) <= pct_tolerance
 
-            if within_2_std and similar_entropy:
+            if within_wiggle_std and similar_entropy:
                 stoppers.append(plan_node_id)
 
         result["Stop These Plan Nodes"] = stoppers

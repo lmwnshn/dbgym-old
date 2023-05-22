@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from flask import Blueprint, current_app
+from flask import Blueprint, current_app, request
 from nyoom_flask.extensions import db
 from nyoom_flask.model.instance import NyoomInstance
 from plumbum import local
@@ -44,6 +44,32 @@ def get_nyoom_dir() -> Path:
 def start():
     db_port = int(os.getenv("TRAINER_PG_PORT"))
 
+    method = "tskip"
+    tskip_wiggle_std = 2.0
+    tskip_wiggle_sampen = 20
+    optimizer_cutoff_pct = 10
+    optimizer_min_processed = 0
+
+    req_json = request.get_json(silent=True)
+    if req_json is not None:
+        method = req_json.get("method", default=method)
+        tskip_wiggle_std = req_json.get("tskip_wiggle_std", default=tskip_wiggle_std)
+        tskip_wiggle_sampen = req_json.get("tskip_wiggle_sampen", default=tskip_wiggle_sampen)
+        optimizer_cutoff_pct = req_json.get("optimizer_cutoff_pct", default=optimizer_cutoff_pct)
+        optimizer_min_processed = req_json.get("optimizer_min_processed", default=optimizer_min_processed)
+
+    startup_args = ["-u", "-m", "nyoom", "--method", f"{method}"]
+    if method == "tskip":
+        startup_args.extend([
+            "--tskip_wiggle_std", f"{tskip_wiggle_std}",
+            "--tskip_wiggle_sampen", f"{tskip_wiggle_sampen}",
+        ])
+    elif method == "optimizer":
+        startup_args.extend([
+            "--optimizer_cutoff_pct", f"{optimizer_cutoff_pct}",
+            "--optimizer_min_processed", f"{optimizer_min_processed}",
+        ])
+
     query = db.select(NyoomInstance).where(NyoomInstance.port == db_port)
     instance: Optional[NyoomInstance] = db.session.execute(query).scalar_one_or_none()
 
@@ -56,7 +82,7 @@ def start():
 
     with open(stdin_file, "w") as stdin, open(stdout_file, "w") as stdout, open(stderr_file, "w") as stderr:
         with tmp_cwd(get_nyoom_dir()):
-            command = local["python3"]["-u", "-m", "nyoom"]
+            command = local["python3"][startup_args]
             pg = command.run_bg(stdin=stdin, stdout=stdout, stderr=stderr)
             pid = pg.proc.pid
 
