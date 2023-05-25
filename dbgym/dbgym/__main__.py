@@ -3,6 +3,7 @@
 #  Bring back the [historical, future] workload split if we're trying to do forecasting.
 import copy
 import os
+import time
 from pathlib import Path
 
 import gymnasium
@@ -496,6 +497,8 @@ def generate_data():
                 print(f"Running: {name}")
 
                 req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
+                # TODO(WAN): pixie dust
+                time.sleep(5)
                 req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
                 assert req.status_code == 200
                 setup_sqls = [
