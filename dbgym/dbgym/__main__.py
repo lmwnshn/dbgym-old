@@ -2,6 +2,7 @@
 #  Bring back all the scheduling and PREPARE stuff that made sense in an OLTP world.
 #  Bring back the [historical, future] workload split if we're trying to do forecasting.
 import copy
+import os
 from pathlib import Path
 
 import gymnasium
@@ -466,6 +467,33 @@ def generate_data():
         for (tws, ttc) in tws_ttc:
             for nc in nyoom_configs:
                 name = get_experiment_name(tws, ttc, nc)
+                nyoom_overwrite = False
+
+                # TODO(WAN): hack to prevent sending superfluous stop/start messages
+                obs_path = Config.SAVE_PATH_OBSERVATION / name
+                obs_path.mkdir(parents=True, exist_ok=True)
+                obs_iter = 0
+                pq_path = obs_path / f"{obs_iter}.parquet"
+
+                gym_will_run = nyoom_overwrite or not pq_path.exists()
+                if not gym_will_run:
+                    print(f"Skipping: {name}")
+
+                    default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+                    default_exec_time = default_df.groupby(["Query Num"]).first()["Execution Time (ms)"].sum()
+
+                    nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
+                    nyoom_exec_time = nyoom_df.groupby(["Query Num"]).first()["Execution Time (ms)"].sum()
+
+                    if nyoom_exec_time > 0.8 * default_exec_time:
+                        # TODO(WAN): Sometimes it bugs out, so we'll just rerun. It seems to fortunately only
+                        #            bug out at the level of individual experiments, which is probably related to
+                        #            the earlier hammering with start and stop.
+                        print(f"Rerunning: {name}")
+                        nyoom_overwrite = True
+                    else:
+                        continue
+                print(f"Running: {name}")
 
                 req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
                 req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
@@ -476,7 +504,7 @@ def generate_data():
                     f"SET nyoom.telemetry_tuple_count = {ttc}",
                 ]
                 print("nyoom_start: ", req.text)
-                gym(name, db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed, overwrite=False)
+                gym(name, db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed, overwrite=nyoom_overwrite)
                 req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
                 assert req.status_code == 200
                 print("nyoom_stop: ", req.text)
@@ -550,7 +578,10 @@ class Model:
     @staticmethod
     def save_model_eval(_expt_name: str, _df: pd.DataFrame, _train_data: TabularDataset, _test_data: TabularDataset,
                         predictor_target: str):
-        if (Config.SAVE_PATH_EVAL / _expt_name).exists():
+        eval_exists = (Config.SAVE_PATH_EVAL / _expt_name).exists()
+        eval_newer = eval_exists and os.path.getmtime(Config.SAVE_PATH_EVAL / _expt_name) > os.path.getmtime(Config.SAVE_PATH_OBSERVATION / _expt_name / "0.parquet")
+
+        if eval_exists and eval_newer:
             return
 
         expt_autogluon = AutogluonModel(Config.SAVE_PATH_MODEL / _expt_name, predictor_target=predictor_target)
