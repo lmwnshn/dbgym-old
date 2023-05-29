@@ -119,26 +119,26 @@ def fig_full():
 
 
 nyoom_configs = [
-    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 0},
-    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 1000},
+    # {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 0},
+    # {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 1000},
     {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 0},
-    {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 1000},
-    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 0},
-    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 1000},
-    {"method": "tskip", "tskip_wiggle_std": 1.0, "tskip_wiggle_sampen": 20},
-    {"method": "tskip", "tskip_wiggle_std": 1.5, "tskip_wiggle_sampen": 20},
-    {"method": "tskip", "tskip_wiggle_std": 2.0, "tskip_wiggle_sampen": 20},
+    # {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 1000},
+    # {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 0},
+    # {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 1000},
+    # {"method": "tskip", "tskip_wiggle_std": 1.0, "tskip_wiggle_sampen": 20},
+    # {"method": "tskip", "tskip_wiggle_std": 1.5, "tskip_wiggle_sampen": 20},
+    # {"method": "tskip", "tskip_wiggle_std": 2.0, "tskip_wiggle_sampen": 20},
     {"method": "tskip", "tskip_wiggle_std": 2.5, "tskip_wiggle_sampen": 20},
-    {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 20},
-    {"method": "tskip", "tskip_wiggle_std": 2.5, "tskip_wiggle_sampen": 50},
-    {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 50},
+    # {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 20},
+    # {"method": "tskip", "tskip_wiggle_std": 2.5, "tskip_wiggle_sampen": 50},
+    # {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 50},
 ]
 tws_ttc = [
-    (10000, 10000),
+    # (10000, 10000),
     (10000, 25000),
-    (10000, 50000),
-    (10000, 75000),
-    (10000, 100000),
+    # (10000, 50000),
+    # (10000, 75000),
+    # (10000, 100000),
 ]
 
 
@@ -268,7 +268,8 @@ def prepare():
 def gym(name, db_snapshot_path, workloads, setup_sqls=None, seed=15721, overwrite=True):
     if setup_sqls is None:
         setup_sqls = []
-    # setup_sqls.append("set max_parallel_workers_per_gather = 0")
+    # TODO(WAN): HACK!!
+    setup_sqls.append("set max_parallel_workers_per_gather = 0")
     db_snapshot = DatabaseSnapshot.from_file(db_snapshot_path)
 
     # Run the queries in the gym.
@@ -505,6 +506,8 @@ def generate_data():
                     "CREATE EXTENSION IF NOT EXISTS nyoom",
                     f"SET nyoom.telemetry_window_size = {tws}",
                     f"SET nyoom.telemetry_tuple_count = {ttc}",
+                    # # TODO(WAN): parallel tests
+                    # f"SET max_parallel_workers_per_gather = 0",
                 ]
                 print("nyoom_start: ", req.text)
                 gym(name, db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed, overwrite=nyoom_overwrite)
@@ -857,12 +860,16 @@ class Plot:
         names = get_experiment_names()
         for name in names:
             default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
+            tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
             nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
 
             default_sums = default_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
+            tablesample_sums = tablesample_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
             nyoom_sums = nyoom_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
 
-            plotter = default_sums.to_frame(name="Default").join(nyoom_sums.to_frame(name="TSkip"))
+            plotter = default_sums.to_frame(name="Default")\
+                .join(tablesample_sums.to_frame(name="Sample"))\
+                .join(nyoom_sums.to_frame(name="TSkip"))
             ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
             ax.set_ylabel("Time (ms)")
             ax.set_xlabel("Operator Type")
@@ -874,13 +881,13 @@ class Plot:
 def main():
     pass
     generate_data()
-    Model.generate_model()
-    Plot.generate_plot()
+    # Model.generate_model()
+    # Plot.generate_plot()
     # Model.generate_model_sweep_tpch()
     # Plot.generate_plot_sweep_tpch()
     # Model.generate_model_noise_tpch()
     # Plot.generate_plot_noise_tpch()
-    Plot.generate_tpch_runtime_by_operator_HACK()
+    # Plot.generate_tpch_runtime_by_operator_HACK()
     Plot.generate_tpch_runtime_by_operator()
     # generate_seqscan_data()
 
