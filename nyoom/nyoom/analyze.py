@@ -79,9 +79,9 @@ class Analyze:
         self._json = json.loads(explain_dump)
         self._graph = self._build_graph(self._json)
         self._dict = self._build_dict(self._json)
-        self._pipelines = self._compute_pipelines()
-        self._drivers = self._compute_drivers()
-        self._bounds = {plan_node_id: {"min": 0, "max": float("inf")} for plan_node_id in self._dict}
+        # self._pipelines = self._compute_pipelines()
+        # self._drivers = self._compute_drivers()
+        # self._bounds = {plan_node_id: {"min": 0, "max": float("inf")} for plan_node_id in self._dict}
 
     def compute_bounds(self):
         self._bounds = self._compute_bounds()
@@ -142,7 +142,6 @@ class Analyze:
                 nonblocking = [
                     "Bitmap Heap Scan",
                     "Hash",  # TODO(WAN): this matches our discussions and pg-progress, but odd...
-                    "Incremental Sort",
                     "Index Only Scan",
                     "Index Scan",
                     "Limit",
@@ -325,8 +324,8 @@ class Analyze:
 
     def get_victims(self, cutoff_pct=10, min_processed=1000):
         victims = []
-        for driver in self._drivers:
-            node = self._dict[driver]
+        for node_id in self._dict:
+            node = self._dict[node_id]
             processed = node["Nyoom Tuples Processed"]
             estimated_total = node["Plan Rows"]
             progress = processed / estimated_total * 100
@@ -334,7 +333,7 @@ class Analyze:
                 # print(f"Waiting for {driver} ({processed} / {estimated_total}, {progress}%)")
                 pass
             elif processed >= min_processed:
-                victims.append(driver)
+                victims.append(node_id)
         return victims
 
     @staticmethod
@@ -373,18 +372,18 @@ class Analyze:
         def get_label(plan_node_id):
             node = self._dict[plan_node_id]
             node_type = node["Node Type"]
-            pipeline_id = self._pipelines.get(plan_node_id, "INVALID")
+            # pipeline_id = self._pipelines.get(plan_node_id, "INVALID")
             tuples_processed = node["Nyoom Tuples Processed"]
             tuples_total_estimate = node["Plan Rows"]
             progress_estimate = round((tuples_processed / tuples_total_estimate) * 100, 2)
-            bounds_min = self._bounds[plan_node_id]["min"]
-            bounds_max = self._bounds[plan_node_id]["max"]
-            bounds_progress_estimate = round((tuples_processed / bounds_max) * 100, 2)
+            # bounds_min = self._bounds[plan_node_id]["min"]
+            # bounds_max = self._bounds[plan_node_id]["max"]
+            # bounds_progress_estimate = round((tuples_processed / bounds_max) * 100, 2)
 
             str_node = f"{plan_node_id} ({node['Node Type']})"
-            str_pipeline = f"\nPipeline: {pipeline_id}\tDriver: {plan_node_id in self._drivers}"
+            # str_pipeline = f"\nPipeline: {pipeline_id}\tDriver: {plan_node_id in self._drivers}"
             str_tuples = f"\nTuples: {tuples_processed} / {tuples_total_estimate} ({progress_estimate}%)"
-            str_bounds = f"\nBounds: [{bounds_min}, {bounds_max}] ({bounds_progress_estimate}%)"
+            # str_bounds = f"\nBounds: [{bounds_min}, {bounds_max}] ({bounds_progress_estimate}%)"
             str_parent = (
                 "" if "Parent Relationship" not in node else f"\nParent Relationship: {node['Parent Relationship']}"
             )
@@ -392,9 +391,9 @@ class Analyze:
             label = "".join(
                 [
                     str_node,
-                    str_pipeline,
+                    # str_pipeline,
                     str_tuples,
-                    str_bounds,
+                    # str_bounds,
                     str_parent,
                 ]
             )
