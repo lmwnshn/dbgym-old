@@ -142,6 +142,7 @@ class Analyze:
                 nonblocking = [
                     "Bitmap Heap Scan",
                     "Hash",  # TODO(WAN): this matches our discussions and pg-progress, but odd...
+                    "Incremental Sort",
                     "Index Only Scan",
                     "Index Scan",
                     "Limit",
