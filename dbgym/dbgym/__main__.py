@@ -868,8 +868,8 @@ class Plot:
             nyoom_sums = nyoom_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
 
             plotter = default_sums.to_frame(name="Default")\
-                .join(tablesample_sums.to_frame(name="Sample"))\
-                .join(nyoom_sums.to_frame(name="TSkip"))
+                .join(tablesample_sums.to_frame(name="Sample"), how="outer")\
+                .join(nyoom_sums.to_frame(name="TSkip"), how="outer")
             ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
             ax.set_ylabel("Time (ms)")
             ax.set_xlabel("Operator Type")
