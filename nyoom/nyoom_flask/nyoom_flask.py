@@ -59,16 +59,19 @@ def start():
         optimizer_min_processed = req_json.get("optimizer_min_processed", default=optimizer_min_processed)
 
     startup_args = ["-u", "-m", "nyoom", "--method", f"{method}"]
+    suffix = f"_{method}"
     if method == "tskip":
         startup_args.extend([
             "--tskip_wiggle_std", f"{tskip_wiggle_std}",
             "--tskip_wiggle_sampen", f"{tskip_wiggle_sampen}",
         ])
+        suffix += f"_std_{tskip_wiggle_std}_sampen_{tskip_wiggle_sampen}"
     elif method == "optimizer":
         startup_args.extend([
             "--optimizer_cutoff_pct", f"{optimizer_cutoff_pct}",
             "--optimizer_min_processed", f"{optimizer_min_processed}",
         ])
+        suffix += f"_cutoff_{optimizer_cutoff_pct}_min_{optimizer_min_processed}"
 
     query = db.select(NyoomInstance).where(NyoomInstance.port == db_port)
     instance: Optional[NyoomInstance] = db.session.execute(query).scalar_one_or_none()
@@ -76,9 +79,9 @@ def start():
     if instance is not None and instance.pid is not None:
         return {"message": f"Instance already exists: {instance}"}
 
-    stdin_file = get_nyoom_dir() / "nyoom_stdin.txt"
-    stdout_file = get_nyoom_dir() / "nyoom_stdout.txt"
-    stderr_file = get_nyoom_dir() / "nyoom_stderr.txt"
+    stdin_file = get_nyoom_dir() / f"nyoom_stdin_{suffix}.txt"
+    stdout_file = get_nyoom_dir() / f"nyoom_stdout_{suffix}.txt"
+    stderr_file = get_nyoom_dir() / f"nyoom_stderr_{suffix}.txt"
 
     with open(stdin_file, "w") as stdin, open(stdout_file, "w") as stdout, open(stderr_file, "w") as stderr:
         with tmp_cwd(get_nyoom_dir()):

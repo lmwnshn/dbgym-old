@@ -119,19 +119,19 @@ def fig_full():
 
 
 nyoom_configs = [
-    # {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 0},
-    # {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 1000},
+    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 0},
+    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 1000},
     {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 0},
-    # {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 1000},
-    # {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 0},
-    # {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 1000},
-    # {"method": "tskip", "tskip_wiggle_std": 1.0, "tskip_wiggle_sampen": 20},
-    # {"method": "tskip", "tskip_wiggle_std": 1.5, "tskip_wiggle_sampen": 20},
-    # {"method": "tskip", "tskip_wiggle_std": 2.0, "tskip_wiggle_sampen": 20},
+    {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 1000},
+    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 0},
+    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 1000},
+    {"method": "tskip", "tskip_wiggle_std": 1.0, "tskip_wiggle_sampen": 20},
+    {"method": "tskip", "tskip_wiggle_std": 1.5, "tskip_wiggle_sampen": 20},
+    {"method": "tskip", "tskip_wiggle_std": 2.0, "tskip_wiggle_sampen": 20},
     {"method": "tskip", "tskip_wiggle_std": 2.5, "tskip_wiggle_sampen": 20},
-    # {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 20},
-    # {"method": "tskip", "tskip_wiggle_std": 2.5, "tskip_wiggle_sampen": 50},
-    # {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 50},
+    {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 20},
+    {"method": "tskip", "tskip_wiggle_std": 2.5, "tskip_wiggle_sampen": 50},
+    {"method": "tskip", "tskip_wiggle_std": 3.0, "tskip_wiggle_sampen": 50},
 ]
 tws_ttc = [
     # (10000, 10000),
@@ -499,15 +499,13 @@ def generate_data():
 
                 req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
                 # TODO(WAN): pixie dust
-                time.sleep(5)
-                req = requests.post(Config.NYOOM_URL + "/nyoom/start/")
+                time.sleep(10)
+                req = requests.post(Config.NYOOM_URL + "/nyoom/start/", data=nc)
                 assert req.status_code == 200
                 setup_sqls = [
                     "CREATE EXTENSION IF NOT EXISTS nyoom",
                     f"SET nyoom.telemetry_window_size = {tws}",
                     f"SET nyoom.telemetry_tuple_count = {ttc}",
-                    # # TODO(WAN): parallel tests
-                    # f"SET max_parallel_workers_per_gather = 0",
                 ]
                 print("nyoom_start: ", req.text)
                 gym(name, db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed, overwrite=nyoom_overwrite)
@@ -867,22 +865,38 @@ class Plot:
             tablesample_sums = tablesample_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
             nyoom_sums = nyoom_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
 
-            plotter = default_sums.to_frame(name="Default")\
+            runtime = default_sums.to_frame(name="Default")\
                 .join(tablesample_sums.to_frame(name="Sample"), how="outer")\
                 .join(nyoom_sums.to_frame(name="TSkip"), how="outer")
-            ax = plotter.plot(kind="bar", cmap=matplotlib.colormaps["tab20"])
-            ax.set_ylabel("Time (ms)")
+            ax = runtime.plot(log=True, kind="bar", cmap=matplotlib.colormaps["tab20"])
+            ax.set_ylabel("Log Time (log ms)")
             ax.set_xlabel("Operator Type")
             plt.tight_layout()
             Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
             plt.savefig(Config.SAVE_PATH_PLOT / f"tpch_runtime_by_operator_{name}.pdf")
+            runtime.to_csv(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator.csv")
+
+            speedup = pd.DataFrame({
+                "Sample": runtime["Default"] / runtime["Sample"],
+                "TSkip": runtime["Default"] / runtime["TSkip"],
+            })
+            ax = speedup.plot(log=True, kind="bar", cmap=matplotlib.colormaps["tab20"])
+            ax.set_ylabel("Log Speedup")
+            ax.set_xlabel("Operator Type")
+            plt.tight_layout()
+            Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
+            plt.savefig(Config.SAVE_PATH_PLOT / f"tpch_speedup_by_operator_{name}.pdf")
+            speedup.to_csv(Config.SAVE_PATH_PLOT / "tpch_speedup_by_operator.csv")
+
+
+
 
 
 def main():
     pass
     generate_data()
-    # Model.generate_model()
-    # Plot.generate_plot()
+    Model.generate_model()
+    Plot.generate_plot()
     # Model.generate_model_sweep_tpch()
     # Plot.generate_plot_sweep_tpch()
     # Model.generate_model_noise_tpch()
