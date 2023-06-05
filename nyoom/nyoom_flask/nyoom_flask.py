@@ -59,7 +59,7 @@ def start():
         optimizer_min_processed = req_json.get("optimizer_min_processed", default=optimizer_min_processed)
 
     startup_args = ["-u", "-m", "nyoom", "--method", f"{method}"]
-    suffix = f"_{method}"
+    suffix = f"{method}"
     if method == "tskip":
         startup_args.extend([
             "--tskip_wiggle_std", f"{tskip_wiggle_std}",
