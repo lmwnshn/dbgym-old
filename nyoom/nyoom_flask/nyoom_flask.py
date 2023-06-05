@@ -52,11 +52,11 @@ def start():
 
     req_json = request.get_json(silent=True)
     if req_json is not None:
-        method = req_json.get("method", default=method)
-        tskip_wiggle_std = req_json.get("tskip_wiggle_std", default=tskip_wiggle_std)
-        tskip_wiggle_sampen = req_json.get("tskip_wiggle_sampen", default=tskip_wiggle_sampen)
-        optimizer_cutoff_pct = req_json.get("optimizer_cutoff_pct", default=optimizer_cutoff_pct)
-        optimizer_min_processed = req_json.get("optimizer_min_processed", default=optimizer_min_processed)
+        method = req_json.get("method", method)
+        tskip_wiggle_std = req_json.get("tskip_wiggle_std", tskip_wiggle_std)
+        tskip_wiggle_sampen = req_json.get("tskip_wiggle_sampen", tskip_wiggle_sampen)
+        optimizer_cutoff_pct = req_json.get("optimizer_cutoff_pct", optimizer_cutoff_pct)
+        optimizer_min_processed = req_json.get("optimizer_min_processed", optimizer_min_processed)
 
     startup_args = ["-u", "-m", "nyoom", "--method", f"{method}"]
     suffix = f"{method}"

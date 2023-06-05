@@ -120,11 +120,11 @@ def fig_full():
 
 nyoom_configs = [
     {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 0},
-    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 1000},
+#    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 1000},
     {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 0},
-    {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 1000},
+#    {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 1000},
     {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 0},
-    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 1000},
+#    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 1000},
     {"method": "tskip", "tskip_wiggle_std": 1.0, "tskip_wiggle_sampen": 20},
     {"method": "tskip", "tskip_wiggle_std": 1.5, "tskip_wiggle_sampen": 20},
     {"method": "tskip", "tskip_wiggle_std": 2.0, "tskip_wiggle_sampen": 20},
@@ -500,7 +500,7 @@ def generate_data():
                 req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
                 # TODO(WAN): pixie dust
                 time.sleep(10)
-                req = requests.post(Config.NYOOM_URL + "/nyoom/start/", data=nc)
+                req = requests.post(Config.NYOOM_URL + "/nyoom/start/", json=nc)
                 assert req.status_code == 200
                 setup_sqls = [
                     "CREATE EXTENSION IF NOT EXISTS nyoom",
