@@ -120,12 +120,14 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
                 seed=seed,
             ),
             "Node Type": spaces.MultiBinary(len(self._node_types), seed=seed),
+            "Nyoom Differenced Total Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
             "Nyoom Tuple Times (us)": spaces.Sequence(
                 spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed), seed=seed
             ),
             "Nyoom Tuple Sizes": spaces.Sequence(
                 spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed), seed=seed
             ),
+            "Nyoom Tuples Processed": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
             "Nyoom Secondary Times (us)": spaces.Sequence(
                 spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed), seed=seed
             ),
@@ -137,7 +139,6 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             "Query Num": spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed),
             "Query Plan": spaces.Text(max_length=1000000000, seed=seed),
             "Query Text": spaces.Text(max_length=100000, seed=seed),
-            "Nyoom Differenced Total Time (ms)": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
         }
         explain_space = spaces.Dict(spaces=space_dict, seed=seed)
         super().__init__(space=explain_space, seed=seed)
@@ -235,6 +236,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             ("Node Type", self._one_hot(self._node_types, plan_dict, "Node Type")),
             ("Nyoom Tuple Times (us)", nyoom_tuple_times_us),
             ("Nyoom Tuple Sizes", nyoom_tuple_sizes),
+            ("Nyoom Tuples Processed", self._singleton(plan_dict["Nyoom Tuples Processed"])),
             ("Nyoom Secondary Times (us)", nyoom_secondary_times_us),
             ("Nyoom Secondary Sizes", nyoom_secondary_sizes),
             ("Observation Index", output_observation_index),
