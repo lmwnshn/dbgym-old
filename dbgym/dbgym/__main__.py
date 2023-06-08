@@ -458,10 +458,10 @@ def generate_data():
         ]
         for nc in nyoom_configs:
             name = get_experiment_name(tws, ttc, nc)
-            gym_configs.append(((yes_nyoom, nc), (name, db_snapshot_path, default_workloads, nyoom_setup_sqls, seed, nyoom_overwrite)))
+            gym_configs.append(((yes_nyoom, nc), (name, db_snapshot_path, default_workloads, seed, nyoom_setup_sqls, nyoom_overwrite)))
 
     for gym_config in gym_configs:
-        (should_nyoom, nc), (name, db_snapshot_path, workloads, seed, setup_sqls, seed, overwrite) = gym_config
+        (should_nyoom, nc), (name, db_snapshot_path, workloads, seed, setup_sqls, overwrite) = gym_config
 
         # TODO(WAN): hack to prevent sending superfluous stop/start messages
         obs_path = Config.SAVE_PATH_OBSERVATION / name
