@@ -1,4 +1,7 @@
 import argparse
+import datetime
+import signal
+import sys
 import time
 import traceback
 
@@ -9,6 +12,12 @@ from nyoom.analyze import Analyze
 from nyoom.config import Config
 
 CHOICES = ["tskip", "optimizer"]
+
+STOPPU = False
+
+
+def stoppu(signal, frame):
+    STOPPU = True
 
 
 def main():
@@ -80,44 +89,44 @@ def main():
                     Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
                 )
 
-                while True:
-                    with trainer_engine.connect() as trainer_conn:
-                        trainer_conn.execute(text("CREATE EXTENSION IF NOT EXISTS nyoom"))
-                        # Dump a snapshot of current state.
-                        trainer_conn.execute(text("SELECT * FROM nyoom_enqueue_dump()"))
-                        # Read the snapshot.
-                        nyoom_read_sql = text("SELECT now() AS ts, pid, token, plan FROM nyoom_read_all()")
-                        nyoom_results, results = [], trainer_conn.execute(nyoom_read_sql)
-                        if results.returns_rows:
-                            insert_sql = text(
-                                "INSERT INTO nyoom_results (ts, pid, token, plan) VALUES (:ts, :pid, :token, :plan)"
-                            )
-                            for row in results:
-                                ts, pid, token, plan = row
-                                nyoom_results.append((ts, pid, token, plan))
-                                insert_data = {"ts": ts, "pid": pid, "token": token, "plan": plan}
-                                gym_conn.execute(insert_sql, insert_data)
-                        # Analyze the snapshot.
-                        # # TODO(WAN): probably better to have this happen on a different thread / microservice.
-                        # # TODO(WAN): don't need to read the result since we just obtained it.
-                        # results_df = pd.read_sql_table("nyoom_results", gym_conn)
-                        # TODO(WAN): pd.read_sql and pd.read_sql_table is cursed for some reason.
-                        active = [(pid, token) for _, pid, token, _ in nyoom_results]
+                with trainer_engine.connect() as trainer_conn:
+                    trainer_conn.execute(text("CREATE EXTENSION IF NOT EXISTS nyoom"))
+                    # Dump a snapshot of current state.
+                    trainer_conn.execute(text("SELECT * FROM nyoom_enqueue_dump()"))
+                    # Read the snapshot.
+                    nyoom_read_sql = text("SELECT now() AS ts, pid, token, plan FROM nyoom_read_all()")
+                    nyoom_results, results = [], trainer_conn.execute(nyoom_read_sql)
+                    if results.returns_rows:
+                        insert_sql = text(
+                            "INSERT INTO nyoom_results (ts, pid, token, plan) VALUES (:ts, :pid, :token, :plan)"
+                        )
+                        for row in results:
+                            ts, pid, token, plan = row
+                            nyoom_results.append((ts, pid, token, plan))
+                            insert_data = {"ts": ts, "pid": pid, "token": token, "plan": plan}
+                            gym_conn.execute(insert_sql, insert_data)
+                    # Analyze the snapshot.
+                    # # TODO(WAN): probably better to have this happen on a different thread / microservice.
+                    # # TODO(WAN): don't need to read the result since we just obtained it.
+                    # results_df = pd.read_sql_table("nyoom_results", gym_conn)
+                    # TODO(WAN): pd.read_sql and pd.read_sql_table is cursed for some reason.
+                    active = [(pid, token) for _, pid, token, _ in nyoom_results]
 
-                        for active_pid, active_token in active:
-                            select_sql = text(
-                                f"""
-                                SELECT ts, pid, token, plan FROM nyoom_results
-                                WHERE pid = {active_pid} AND token={token} AND id>{max_id}
-                                ORDER BY id DESC
-                                LIMIT 3
-                                """
-                            )
-                            active_results = gym_conn.execute(select_sql)
-                            active_results = [(ts, pid, token, plan) for ts, pid, token, plan in active_results]
+                    for active_pid, active_token in active:
+                        select_sql = text(
+                            f"""
+                            SELECT ts, pid, token, plan FROM nyoom_results
+                            WHERE pid = {active_pid} AND token={token} AND id>{max_id}
+                            ORDER BY id DESC
+                            LIMIT 3
+                            """
+                        )
+                        active_results = gym_conn.execute(select_sql)
+                        active_results = [(ts, pid, token, plan) for ts, pid, token, plan in active_results]
 
-                            analyzes = []
-                            for ts, pid, token, plan in active_results:
+                        analyzes = []
+                        for ts, pid, token, plan in active_results:
+                            try:
                                 analyze = Analyze(relname_reltuples_map, indexname_tablename_map, plan)
                                 try:
                                     # TODO(WAN): We no longer use these bounds.
@@ -131,40 +140,47 @@ def main():
                                         traceback.print_exc(file=f)
                                     with open(f"/nyoom/{pid}-{ts}-plan.json", "w") as f:
                                         print(plan, file=f)
+                            except:
+                                continue
 
-                            victim_plan_node_ids = None
-                            if args.method == "tskip":
-                                if len(analyzes) < 2:
-                                    # Not enough data to make a decision.
-                                    continue
+                        victim_plan_node_ids = None
+                        if args.method == "tskip":
+                            if len(analyzes) < 2:
+                                # Not enough data to make a decision.
+                                continue
 
-                                analysis = Analyze.compare(
-                                    analyzes[-2], analyzes[-1],
-                                    wiggle_std=args.tskip_wiggle_std,
-                                    wiggle_sampen=args.tskip_wiggle_sampen,
-                                )
-                                victim_plan_node_ids = analysis["Stop These Plan Nodes"]
-                            elif args.method == "optimizer":
-                                if len(analyzes) < 1:
-                                    continue
-                                victim_plan_node_ids = analyzes[-1].get_victims(
-                                    cutoff_pct=args.optimizer_cutoff_pct,
-                                    min_processed=args.optimizer_min_processed,
-                                )
-                            assert victim_plan_node_ids is not None
-
-                            print(
-                                f"Stopping {pid=} {token=}: ",
-                                victim_plan_node_ids,
+                            analysis = Analyze.compare(
+                                analyzes[-2], analyzes[-1],
+                                wiggle_std=args.tskip_wiggle_std,
+                                wiggle_sampen=args.tskip_wiggle_sampen,
                             )
-                            for plan_node_id in victim_plan_node_ids:
-                                zw_sql = text(f"SELECT * FROM nyoom_enqueue_zw({pid}, {token}, {plan_node_id})")
-                                trainer_conn.execute(zw_sql)
-                        time.sleep(1)
+                            victim_plan_node_ids = analysis["Stop These Plan Nodes"]
+                        elif args.method == "optimizer":
+                            if len(analyzes) < 1:
+                                continue
+                            victim_plan_node_ids = analyzes[-1].get_victims(
+                                cutoff_pct=args.optimizer_cutoff_pct,
+                                min_processed=args.optimizer_min_processed,
+                            )
+                        assert victim_plan_node_ids is not None
+
+                        print(
+                            f"{datetime.datetime.now()} Stopping {pid=} {token=}: ",
+                            victim_plan_node_ids,
+                        )
+                        for plan_node_id in victim_plan_node_ids:
+                            zw_sql = text(f"SELECT * FROM nyoom_enqueue_zw({pid}, {token}, {plan_node_id})")
+                            trainer_conn.execute(zw_sql)
+                    time.sleep(1)
+
+                    if STOPPU:
+                        trainer_conn.close()
+                        sys.exit(0)
             except SQLAlchemyError as e:
                 print(e)
             time.sleep(1)
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, stoppu)
     main()

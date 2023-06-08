@@ -120,11 +120,11 @@ def fig_full():
 
 nyoom_configs = [
     {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 0},
-#    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 1000},
+    {"method": "optimizer", "optimizer_cutoff_pct": 10, "optimizer_min_processed": 1000},
     {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 0},
-#    {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 1000},
+    {"method": "optimizer", "optimizer_cutoff_pct": 20, "optimizer_min_processed": 1000},
     {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 0},
-#    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 1000},
+    {"method": "optimizer", "optimizer_cutoff_pct": 50, "optimizer_min_processed": 1000},
     {"method": "tskip", "tskip_wiggle_std": 1.0, "tskip_wiggle_sampen": 20},
     {"method": "tskip", "tskip_wiggle_std": 1.5, "tskip_wiggle_sampen": 20},
     {"method": "tskip", "tskip_wiggle_std": 2.0, "tskip_wiggle_sampen": 20},
@@ -434,7 +434,6 @@ def generate_data():
     tablesample_workloads = [hack_tablesample_tpch(workload) for workload in default_workloads]
 
     seed = 15721
-
     db_snapshot_path = Path("/dbgym/snapshot.pkl").absolute()
 
     setup_sqls = [
@@ -498,6 +497,7 @@ def generate_data():
                 req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
                 # TODO(WAN): pixie dust
                 time.sleep(10)
+                prepare()
                 req = requests.post(Config.NYOOM_URL + "/nyoom/start/", json=nc)
                 assert req.status_code == 200
                 print("nyoom_start: ", req.text)
@@ -855,24 +855,31 @@ class Plot:
             tablesample_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "tablesample" / "0.parquet")
             nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
 
-            default_sums = default_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
-            tablesample_sums = tablesample_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
-            nyoom_sums = nyoom_df.groupby("Node Type")["Nyoom Differenced Total Time (ms)"].sum()
+            ndtt = "Nyoom Differenced Total Time (ms)"
+            ntp = "Nyoom Tuples Processed"
 
-            runtime = default_sums.to_frame(name="Default")\
-                .join(tablesample_sums.to_frame(name="Sample"), how="outer")\
-                .join(nyoom_sums.to_frame(name="TSkip"), how="outer")
-            ax = runtime.plot(log=True, kind="bar", cmap=matplotlib.colormaps["tab20"])
-            ax.set_ylabel("Log Time (log ms)")
-            ax.set_xlabel("Operator Type")
+            default_sums = default_df.groupby("Node Type")[[ndtt, ntp]].sum().rename(columns={ndtt: f"Default {ndtt}", ntp: f"Default {ntp}"})
+            tablesample_sums = tablesample_df.groupby("Node Type")[[ndtt, ntp]].sum().rename(columns={ndtt: f"Sample {ndtt}", ntp: f"Sample {ntp}"})
+            nyoom_sums = nyoom_df.groupby("Node Type")[[ndtt, ntp]].sum().rename(columns={ndtt: f"TSkip {ndtt}", ntp: f"TSkip {ntp}"})
+
+            runtime = default_sums\
+                .join(tablesample_sums, how="outer")\
+                .join(nyoom_sums, how="outer")
+            ax = runtime[[f"Default {ndtt}", f"Sample {ndtt}", f"TSkip {ndtt}"]].plot(log=True, kind="barh", cmap=matplotlib.colormaps["tab20"])
+            ax.legend(bbox_to_anchor=(0,0), labels=["Default", "Sample", "TSkip"])
+            ax.bar_label(ax.containers[0], labels=[f"{x:.0f}" for x in runtime[f"Default {ntp}"]], fontsize="x-small")
+            ax.bar_label(ax.containers[1], labels=[f"{x:.0f}" for x in runtime[f"Sample {ntp}"]], fontsize="x-small")
+            ax.bar_label(ax.containers[2], labels=[f"{x:.0f}" for x in runtime[f"TSkip {ntp}"]], fontsize="x-small")
+            ax.set_xlabel("Log Time (log ms)")
+            ax.set_ylabel("Operator Type")
             plt.tight_layout()
             Config.SAVE_PATH_PLOT.mkdir(parents=True, exist_ok=True)
             plt.savefig(Config.SAVE_PATH_PLOT / f"tpch_runtime_by_operator_{name}.pdf")
             runtime.to_csv(Config.SAVE_PATH_PLOT / "tpch_runtime_by_operator.csv")
 
             speedup = pd.DataFrame({
-                "Sample": runtime["Default"] / runtime["Sample"],
-                "TSkip": runtime["Default"] / runtime["TSkip"],
+                "Sample": runtime[f"Default {ndtt}"] / runtime[f"Sample {ndtt}"],
+                "TSkip": runtime[f"Default {ndtt}"] / runtime[f"TSkip {ndtt}"],
             })
             ax = speedup.plot(log=True, kind="bar", cmap=matplotlib.colormaps["tab20"])
             ax.set_ylabel("Log Speedup")
@@ -888,9 +895,9 @@ class Plot:
 
 def main():
     pass
-    generate_data()
-    Model.generate_model()
-    Plot.generate_plot()
+    #generate_data()
+    #Model.generate_model()
+    #Plot.generate_plot()
     # Model.generate_model_sweep_tpch()
     # Plot.generate_plot_sweep_tpch()
     # Model.generate_model_noise_tpch()
