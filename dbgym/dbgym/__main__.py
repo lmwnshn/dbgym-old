@@ -434,81 +434,75 @@ def generate_data():
     tablesample_workloads = [hack_tablesample_tpch(workload) for workload in default_workloads]
 
     seed = 15721
-    with PostgresTrainer(Config.TRAINER_URL, force_rebuild=False) as trainer:
-        assert trainer.dbms_exists(), "Startup failed?"
-        trainer.dbms_install_nyoom()
-        pgtune()
-        trainer.dbms_restart()
-        loaded = load_if_not_exists("tpch")
-        prepare()
 
-        # TODO(WAN): assumes read-only.
-        db_snapshot_path = Path("/dbgym/snapshot.pkl").absolute()
-        if loaded or not db_snapshot_path.exists():
-            print("Snapshot: generating.")
-            engine = create_engine(
-                Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
-            )
-            db_snapshot = DatabaseSnapshot(engine)
-            engine.dispose()
-            db_snapshot.to_file(db_snapshot_path)
-            print("Snapshot: complete.")
+    db_snapshot_path = Path("/dbgym/snapshot.pkl").absolute()
 
-        engine = create_engine(
-            Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
-        )
-        with engine.connect() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS nyoom"))
-        engine.dispose()
+    setup_sqls = [
+        "CREATE EXTENSION IF NOT EXISTS nyoom",
+    ]
 
-        setup_sqls = ["CREATE EXTENSION IF NOT EXISTS nyoom"]
-        gym("test", db_snapshot_path, test_workloads, seed=seed, setup_sqls=setup_sqls, overwrite=False)
-        gym("default", db_snapshot_path, default_workloads, seed=seed, setup_sqls=setup_sqls, overwrite=False)
-        gym("tablesample", db_snapshot_path, tablesample_workloads, seed=seed, setup_sqls=setup_sqls, overwrite=False)
+    yes_nyoom = True
+    no_nyoom = False
+    overwrite = False
+    nyoom_overwrite = False
+    gym_configs = [
+        ((no_nyoom, None), ("test", db_snapshot_path, test_workloads, seed, setup_sqls, overwrite)),
+        ((no_nyoom, None), ("default", db_snapshot_path, default_workloads, seed, setup_sqls, overwrite)),
+        ((no_nyoom, None), ("tablesample", db_snapshot_path, tablesample_workloads, seed, setup_sqls, overwrite)),
+    ]
 
-        for (tws, ttc) in tws_ttc:
-            for nc in nyoom_configs:
-                name = get_experiment_name(tws, ttc, nc)
-                nyoom_overwrite = False
+    for (tws, ttc) in tws_ttc:
+        nyoom_setup_sqls = [
+            "CREATE EXTENSION IF NOT EXISTS nyoom",
+            f"SET nyoom.telemetry_window_size = {tws}",
+            f"SET nyoom.telemetry_tuple_count = {ttc}",
+        ]
+        for nc in nyoom_configs:
+            name = get_experiment_name(tws, ttc, nc)
+            gym_configs.append(((yes_nyoom, nc), (name, db_snapshot_path, default_workloads, nyoom_setup_sqls, seed, nyoom_overwrite)))
 
-                # TODO(WAN): hack to prevent sending superfluous stop/start messages
-                obs_path = Config.SAVE_PATH_OBSERVATION / name
-                obs_path.mkdir(parents=True, exist_ok=True)
-                obs_iter = 0
-                pq_path = obs_path / f"{obs_iter}.parquet"
+    for gym_config in gym_configs:
+        (should_nyoom, nc), (name, db_snapshot_path, workloads, seed, setup_sqls, seed, overwrite) = gym_config
 
-                gym_will_run = nyoom_overwrite or not pq_path.exists()
-                if not gym_will_run:
-                    print(f"Skipping: {name}")
+        # TODO(WAN): hack to prevent sending superfluous stop/start messages
+        obs_path = Config.SAVE_PATH_OBSERVATION / name
+        obs_path.mkdir(parents=True, exist_ok=True)
+        obs_iter = 0
+        pq_path = obs_path / f"{obs_iter}.parquet"
+        gym_will_run = overwrite or not pq_path.exists()
+        if not gym_will_run:
+            print(f"Skipping: {name}")
+            continue
 
-                    default_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / "default" / "0.parquet")
-                    default_exec_time = default_df.groupby(["Query Num"]).first()["Execution Time (ms)"].sum()
+        print(f"Running: {name}")
+        with PostgresTrainer(Config.TRAINER_URL, force_rebuild=False) as trainer:
+            assert trainer.dbms_exists(), "Startup failed?"
+            trainer.dbms_install_nyoom()
+            pgtune()
+            trainer.dbms_restart()
+            loaded = load_if_not_exists("tpch")
+            prepare()
 
-                    nyoom_df = pd.read_parquet(Config.SAVE_PATH_OBSERVATION / name / "0.parquet")
-                    nyoom_exec_time = nyoom_df.groupby(["Query Num"]).first()["Execution Time (ms)"].sum()
+            # TODO(WAN): assumes read-only.
+            if loaded or not db_snapshot_path.exists():
+                print("Snapshot: generating.")
+                engine = create_engine(
+                    Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+                )
+                db_snapshot = DatabaseSnapshot(engine)
+                engine.dispose()
+                db_snapshot.to_file(db_snapshot_path)
+                print("Snapshot: complete.")
 
-                    if nyoom_exec_time > 0.8 * default_exec_time:
-                        # TODO(WAN): Sometimes it bugs out, so we'll just rerun. It seems to fortunately only
-                        #            bug out at the level of individual experiments, which is probably related to
-                        #            the earlier hammering with start and stop.
-                        print(f"Rerunning: {name}")
-                        nyoom_overwrite = True
-                    else:
-                        continue
-                print(f"Running: {name}")
-
+            if should_nyoom:
                 req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
                 # TODO(WAN): pixie dust
                 time.sleep(10)
                 req = requests.post(Config.NYOOM_URL + "/nyoom/start/", json=nc)
                 assert req.status_code == 200
-                setup_sqls = [
-                    "CREATE EXTENSION IF NOT EXISTS nyoom",
-                    f"SET nyoom.telemetry_window_size = {tws}",
-                    f"SET nyoom.telemetry_tuple_count = {ttc}",
-                ]
                 print("nyoom_start: ", req.text)
-                gym(name, db_snapshot_path, default_workloads, setup_sqls=setup_sqls, seed=seed, overwrite=nyoom_overwrite)
+            gym(name, db_snapshot_path, workloads, setup_sqls=setup_sqls, seed=seed, overwrite=overwrite)
+            if should_nyoom:
                 req = requests.post(Config.NYOOM_URL + "/nyoom/stop/")
                 assert req.status_code == 200
                 print("nyoom_stop: ", req.text)
