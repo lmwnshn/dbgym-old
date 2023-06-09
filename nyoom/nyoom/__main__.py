@@ -17,6 +17,7 @@ STOPPU = False
 
 
 def stoppu(signal, frame):
+    global STOPPU
     STOPPU = True
 
 
