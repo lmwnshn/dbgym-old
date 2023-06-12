@@ -156,6 +156,7 @@ def get_experiment_names():
     for (tws, ttc) in tws_ttc:
         for nc in nyoom_configs:
             names.append(get_experiment_name(tws, ttc, nc))
+    names.append("nyoomsample")
     return names
 
 
@@ -449,6 +450,15 @@ def generate_data():
         ((no_nyoom, None), ("default", db_snapshot_path, default_workloads, seed, setup_sqls, overwrite)),
         ((no_nyoom, None), ("tablesample", db_snapshot_path, tablesample_workloads, seed, setup_sqls, overwrite)),
     ]
+
+    nyoom_setup_sqls = [
+        "CREATE EXTENSION IF NOT EXISTS nyoom",
+        f"SET nyoom.should_sample_seq = true",
+        f"SET nyoom.sample_seq_pct = 10",
+        f"SET nyoom.sample_seq_seed = 15721",
+    ]
+    gym_configs.append(
+        ((no_nyoom, None), ("nyoomsample", db_snapshot_path, default_workloads, seed, nyoom_setup_sqls, nyoom_overwrite)))
 
     for (tws, ttc) in tws_ttc:
         nyoom_setup_sqls = [
