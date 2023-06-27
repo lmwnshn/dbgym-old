@@ -23,7 +23,7 @@ class AutogluonModel:
 
     def train(self, dataset: TabularDataset, time_limit=Config.AUTOGLUON_TIME_LIMIT_S):
         print("Training:", dataset.columns)
-        self.predictor.fit(dataset, time_limit=time_limit)
+        self.predictor.fit(dataset, time_limit=time_limit, presets="best_quality")
         pd.Series({"Training Time (s)": time_limit}).to_pickle(self.save_path / "training_time.pkl")
         self.predictor.save()
 
