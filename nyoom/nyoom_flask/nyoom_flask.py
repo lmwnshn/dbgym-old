@@ -61,16 +61,24 @@ def start():
     startup_args = ["-u", "-m", "nyoom", "--method", f"{method}"]
     suffix = f"{method}"
     if method == "tskip":
-        startup_args.extend([
-            "--tskip_wiggle_std", f"{tskip_wiggle_std}",
-            "--tskip_wiggle_sampen", f"{tskip_wiggle_sampen}",
-        ])
+        startup_args.extend(
+            [
+                "--tskip_wiggle_std",
+                f"{tskip_wiggle_std}",
+                "--tskip_wiggle_sampen",
+                f"{tskip_wiggle_sampen}",
+            ]
+        )
         suffix += f"_std_{tskip_wiggle_std}_sampen_{tskip_wiggle_sampen}"
     elif method == "optimizer":
-        startup_args.extend([
-            "--optimizer_cutoff_pct", f"{optimizer_cutoff_pct}",
-            "--optimizer_min_processed", f"{optimizer_min_processed}",
-        ])
+        startup_args.extend(
+            [
+                "--optimizer_cutoff_pct",
+                f"{optimizer_cutoff_pct}",
+                "--optimizer_min_processed",
+                f"{optimizer_min_processed}",
+            ]
+        )
         suffix += f"_cutoff_{optimizer_cutoff_pct}_min_{optimizer_min_processed}"
 
     query = db.select(NyoomInstance).where(NyoomInstance.port == db_port)

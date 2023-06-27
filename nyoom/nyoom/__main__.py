@@ -151,7 +151,8 @@ def main():
                                 continue
 
                             analysis = Analyze.compare(
-                                analyzes[-2], analyzes[-1],
+                                analyzes[-2],
+                                analyzes[-1],
                                 wiggle_std=args.tskip_wiggle_std,
                                 wiggle_sampen=args.tskip_wiggle_sampen,
                             )

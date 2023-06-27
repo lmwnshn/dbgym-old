@@ -81,9 +81,9 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
     _partial_modes = ["invalid", "Simple", "Partial", "Finalize"]
 
     def __init__(
-            self,
-            db_snapshot: DatabaseSnapshot,
-            seed: int = 15721,
+        self,
+        db_snapshot: DatabaseSnapshot,
+        seed: int = 15721,
     ):
         assert len(db_snapshot.snapshot["schemas"]) == 1, "No support for multiple schemas."
         self._db_snapshot = db_snapshot
@@ -124,9 +124,7 @@ class QPPNetFeatures(spaces.Sequence, BaseFeatureSpace):
             "Nyoom Tuple Times (us)": spaces.Sequence(
                 spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed), seed=seed
             ),
-            "Nyoom Tuple Sizes": spaces.Sequence(
-                spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed), seed=seed
-            ),
+            "Nyoom Tuple Sizes": spaces.Sequence(spaces.Box(low=0, high=np.inf, dtype=np.int32, seed=seed), seed=seed),
             "Nyoom Tuples Processed": spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed),
             "Nyoom Secondary Times (us)": spaces.Sequence(
                 spaces.Box(low=0, high=np.inf, dtype=np.float32, seed=seed), seed=seed
