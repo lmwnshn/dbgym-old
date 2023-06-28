@@ -11,7 +11,9 @@ class AutogluonModel:
         self.save_path: Path = save_path
         self.predictor_target = predictor_target
         self.unit = self.predictor_target.split(" ")[-1]
-        self.predictor: TabularPredictor = TabularPredictor(label=self.predictor_target, path=str(self.save_path))
+        self.predictor: TabularPredictor = TabularPredictor(
+            label=self.predictor_target, eval_metric="mean_absolute_error", path=str(self.save_path)
+        )
 
     def try_load(self) -> bool:
         try:
@@ -23,7 +25,7 @@ class AutogluonModel:
 
     def train(self, dataset: TabularDataset, time_limit=Config.AUTOGLUON_TIME_LIMIT_S):
         print("Training:", dataset.columns)
-        self.predictor.fit(dataset, time_limit=time_limit, eval_metric="mean_absolute_error", presets="best_quality")
+        self.predictor.fit(dataset, time_limit=time_limit, presets="best_quality")
         pd.Series({"Training Time (s)": time_limit}).to_pickle(self.save_path / "training_time.pkl")
         self.predictor.save()
 
