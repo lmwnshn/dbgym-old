@@ -23,6 +23,12 @@ def stoppu(signal, frame):
 
 def main():
     parser = argparse.ArgumentParser()
+
+    parser.add_argument("--hostname", type=str, required=True)
+    parser.add_argument("--db_name", type=str, required=True)
+    parser.add_argument("--db_port", type=int, required=True)
+    parser.add_argument("--db_user", type=str, required=True)
+    parser.add_argument("--db_pass", type=str, required=True)
     parser.add_argument("--method", type=str, choices=CHOICES, required=True)
     parser.add_argument("--tskip_wiggle_std", type=float, default=2.0)
     parser.add_argument("--tskip_wiggle_sampen", type=float, default=20)
@@ -44,7 +50,8 @@ def main():
         relname_reltuples_map = {}
         indexname_tablename_map = {}
         trainer_engine = create_engine(
-            Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+            f"postgresql+psycopg://{args.db_user}:{args.db_pass}@{args.hostname}:{args.db_port}/{args.db_name}",
+            poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
         )
         with trainer_engine.connect() as trainer_conn:
             print("Building relname_reltuples_map.")
@@ -87,7 +94,8 @@ def main():
         while True:
             try:
                 trainer_engine = create_engine(
-                    Config.TRAINER_PG_URI, poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
+                    f"postgresql+psycopg://{args.db_user}:{args.db_pass}@{args.hostname}:{args.db_port}/{args.db_name}",
+                    poolclass=NullPool, execution_options={"isolation_level": "AUTOCOMMIT"}
                 )
 
                 with trainer_engine.connect() as trainer_conn:

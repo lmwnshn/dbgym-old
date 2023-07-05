@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
-echo "Creating volume 'tpch_queries'."
+if docker volume inspect tpch_queries; then
+  echo "Volume 'tpch_queries' exists."
+  exit
+fi
+
+echo "Volume 'tpch_queries' doesn't exist, creating."
 
 set -euxo pipefail
 

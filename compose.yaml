@@ -25,10 +25,7 @@ services:
       GYM_DB_PASS: "${GYM_DB_PASS}"
       GYM_DB_USER: "${GYM_DB_USER}"
       TRAINER_PORT: "${TRAINER_PORT}"
-      TRAINER_PG_NAME: "${TRAINER_PG_NAME}"
-      TRAINER_PG_PASS: "${TRAINER_PG_PASS}"
       TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
-      TRAINER_PG_USER: "${TRAINER_PG_USER}"
     init: true
     ports:
       - "${TRAINER_PORT}:${TRAINER_PORT}"
@@ -36,6 +33,10 @@ services:
     shm_size: "48gb"
     volumes:
       - "trainer:/trainer"
+      - "trainer_db:/trainer_db"
+      - "dsb_sf1:/dsb_sf1"
+      - "dsb_sf10:/dsb_sf10"
+      - "dsb_sf100:/dsb_sf100"
       - "tpch_sf1:/tpch_sf1"
       - "tpch_sf10:/tpch_sf10"
       - "tpch_sf100:/tpch_sf100"
@@ -66,10 +67,6 @@ services:
       GYM_DB_NAME: "${GYM_DB_NAME}"
       GYM_DB_PASS: "${GYM_DB_PASS}"
       GYM_DB_USER: "${GYM_DB_USER}"
-      TRAINER_PG_NAME: "${TRAINER_PG_NAME}"
-      TRAINER_PG_PASS: "${TRAINER_PG_PASS}"
-      TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
-      TRAINER_PG_USER: "${TRAINER_PG_USER}"
       MONITOR_PORT: "${MONITOR_PORT}"
       NYOOM_PORT: "${NYOOM_PORT}"
     ports:
@@ -90,12 +87,11 @@ services:
       GYM_DB_USER: "${GYM_DB_USER}"
       NYOOM_PORT: "${NYOOM_PORT}"
       TRAINER_PORT: "${TRAINER_PORT}"
-      TRAINER_PG_NAME: "${TRAINER_PG_NAME}"
-      TRAINER_PG_PASS: "${TRAINER_PG_PASS}"
       TRAINER_PG_PORT: "${TRAINER_PG_PORT}"
-      TRAINER_PG_USER: "${TRAINER_PG_USER}"
     volumes:
       - "dbgym:/dbgym"
+      - "dsb_queries:/dsb_queries"
+      - "dsb_schema:/dsb_schema"
       - "tpch_queries:/tpch_queries"
       - "tpch_schema:/tpch_schema"
     profiles:
@@ -106,6 +102,18 @@ volumes:
   gym_db: {}
   nyoom: {}
   trainer: {}
+  trainer_db:
+    external: true
+  dsb_schema:
+    external: true
+  dsb_sf1:
+    external: true
+  dsb_sf10:
+    external: true
+  dsb_sf100:
+    external: true
+  dsb_queries:
+    external: true
   tpch_schema:
     external: true
   tpch_sf1:

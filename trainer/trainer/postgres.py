@@ -43,6 +43,15 @@ def get_trainer_dir() -> Path:
     return trainer_dir.absolute()
 
 
+def get_trainer_db_dir() -> Path:
+    trainer_db_dir: Path = current_app.config["TRAINER_DB_DIR"]
+    return trainer_db_dir.absolute()
+
+
+def get_pg_data_dir(db_name) -> Path:
+    return (get_trainer_db_dir() / db_name).absolute()
+
+
 def get_pg_dir() -> Path:
     return (get_trainer_dir() / "postgres").absolute()
 
@@ -55,22 +64,36 @@ def get_pg_bin_dir() -> Path:
     return (get_pg_build_dir() / "bin").absolute()
 
 
-def get_pg_data_dir() -> Path:
-    return (get_pg_bin_dir() / "pgdata").absolute()
-
-
 def get_nyoom_dir() -> Path:
     return (get_pg_dir() / "cmudb" / "extensions" / "nyoom").absolute()
 
 
-@postgres.route("/exists/", methods=["POST"])
-def exists():
-    return {"initialized": get_pg_data_dir().exists()}
+@postgres.route("/bin_exists/", methods=["POST"])
+def bin_exists():
+    return {"initialized": get_pg_bin_dir().exists()}
+
+
+@postgres.route("/db_exists/", methods=["POST"])
+def db_exists():
+    req_json = request.get_json(silent=True)
+    data_dir_exists = False
+    try:
+        db_name = req_json.get("db_name")
+        data_dir_exists = (get_pg_data_dir(db_name)).exists()
+    except Exception:
+        pass
+
+    return {"initialized": data_dir_exists}
 
 
 @postgres.route("/pg_isready/", methods=["POST"])
 def pg_isready():
-    db_port = int(os.getenv("TRAINER_PG_PORT"))
+    req_json = request.get_json(silent=True)
+    try:
+        db_port = int(req_json.get("db_port"))
+    except Exception:
+        return f"Bad request: {req_json=}", 400
+
     command = local[get_pg_bin_dir() / "pg_isready"]["-p", db_port]
     result = run_command(command, expected_retcodes=[0, 1, 2])
     return result
@@ -78,7 +101,12 @@ def pg_isready():
 
 @postgres.route("/pg_isready_blocking/", methods=["POST"])
 def pg_isready_blocking():
-    db_port = int(os.getenv("TRAINER_PG_PORT"))
+    req_json = request.get_json(silent=True)
+    try:
+        db_port = int(req_json.get("db_port"))
+    except Exception:
+        return f"Bad request: {req_json=}", 400
+
     command = local[get_pg_bin_dir() / "pg_isready"]["-p", db_port]
     while True:
         result = run_command(command, expected_retcodes=[0, 1, 2])
@@ -181,10 +209,16 @@ def make():
 
 @postgres.route("/initdb/", methods=["POST"])
 def initdb():
-    shutil.rmtree(get_pg_data_dir(), ignore_errors=True)
-    command = local[get_pg_bin_dir() / "initdb"]["-D", get_pg_data_dir()]
+    req_json = request.get_json(silent=True)
+    try:
+        data_dir = get_pg_data_dir(req_json.get("db_name"))
+    except Exception:
+        return f"Bad request: {req_json=}", 400
+
+    shutil.rmtree(data_dir, ignore_errors=True)
+    command = local[get_pg_bin_dir() / "initdb"]["-D", data_dir]
     result = run_command(command)
-    with tmp_cwd(get_pg_data_dir()):
+    with tmp_cwd(data_dir):
         with open("pg_hba.conf", "a") as f:
             print("host all all 0.0.0.0/0 md5", file=f)
         with open("postgresql.conf", "a") as f:
@@ -194,23 +228,32 @@ def initdb():
 
 @postgres.route("/start/", methods=["POST"])
 def start():
-    db_name = os.getenv("TRAINER_PG_NAME")
-    db_port = int(os.getenv("TRAINER_PG_PORT"))
-    db_pass = os.getenv("TRAINER_PG_PASS")
-    db_user = os.getenv("TRAINER_PG_USER")
+    req_json = request.get_json(silent=True)
+    try:
+        db_name = req_json.get("db_name")
+        db_port = int(req_json.get("db_port"))
+        db_pass = req_json.get("db_pass")
+        db_user = req_json.get("db_user")
+    except Exception:
+        return f"Bad request: {req_json=}", 400
 
+    data_dir = get_pg_data_dir(db_name)
     query = db.select(TrainerInstance).where(TrainerInstance.port == db_port)
     instance: Optional[TrainerInstance] = db.session.execute(query).scalar_one_or_none()
 
     if instance is not None and instance.pid is not None:
         return {"message": f"Instance already exists: {instance}"}
 
+    # TODO(WAN): hack to install nyoom in case there's a leftover .auto file.
+    with tmp_cwd(get_nyoom_dir()):
+        command = local["make"]["install", "-j"]
+
     stdin_file = get_pg_bin_dir() / "pg_stdin.txt"
     stdout_file = get_pg_bin_dir() / "pg_stdout.txt"
     stderr_file = get_pg_bin_dir() / "pg_stderr.txt"
 
     with open(stdin_file, "w") as stdin, open(stdout_file, "w") as stdout, open(stderr_file, "w") as stderr:
-        command = local[get_pg_bin_dir() / "postgres"]["-D", get_pg_data_dir(), "-p", db_port]
+        command = local[get_pg_bin_dir() / "postgres"]["-D", data_dir, "-p", db_port]
         pg = command.run_bg(stdin=stdin, stdout=stdout, stderr=stderr)
         pid = pg.proc.pid
 
@@ -250,6 +293,7 @@ def start():
         instance.pid = pid
     else:
         instance = TrainerInstance(
+            db_name=db_name,
             port=db_port,
             initialized=True,
             db_type="postgres",
@@ -266,7 +310,12 @@ def start():
 
 @postgres.route("/stop/", methods=["POST"])
 def stop():
-    db_port = int(os.getenv("TRAINER_PG_PORT"))
+    req_json = request.get_json(silent=True)
+    try:
+        db_port = int(req_json.get("db_port"))
+    except Exception:
+        return f"Bad request: {req_json=}", 400
+
     query = db.select(TrainerInstance).where(TrainerInstance.port == db_port)
     instance: Optional[TrainerInstance] = db.session.execute(query).scalar_one_or_none()
     if instance is None or instance.pid is None:
@@ -276,14 +325,18 @@ def stop():
     instance.pid = None
     db.session.commit()
     if result["retcode"] == 0:
-        while (get_pg_data_dir() / "postmaster.pid").exists():
+        while (get_pg_data_dir(instance.db_name) / "postmaster.pid").exists():
             time.sleep(1)
     return result
 
 
 @postgres.route("/nyoom/", methods=["POST"])
 def nyoom():
-    db_port = int(os.getenv("TRAINER_PG_PORT"))
+    req_json = request.get_json(silent=True)
+    try:
+        db_port = int(req_json.get("db_port"))
+    except Exception:
+        return f"Bad request: {req_json=}", 400
 
     result = {}
     with tmp_cwd(get_nyoom_dir()):

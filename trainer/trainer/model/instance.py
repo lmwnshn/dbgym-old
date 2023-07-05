@@ -7,6 +7,7 @@ class TrainerInstance(db.Model):
     __tablename__ = "trainer_instance"
 
     port = sa.Column(sa.Integer, primary_key=True)
+    db_name = sa.Column(sa.Text, nullable=False)
     db_type = sa.Column(sa.Text, nullable=False)
     initialized = sa.Column(sa.Boolean, nullable=False)
     stdin_file = sa.Column(sa.Text, nullable=False)
@@ -18,6 +19,7 @@ class TrainerInstance(db.Model):
         return (
             f"<{self.__tablename__} "
             f"{self.port=} "
+            f"{self.db_name=} "
             f"{self.db_type=} "
             f"{self.initialized=} "
             f"{self.stdin_file=} "

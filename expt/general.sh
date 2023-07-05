@@ -3,10 +3,10 @@
 sudo --validate
 while sleep 300; do sudo --validate; kill -0 "$$" || exit; done 2>/dev/null &
 
-set -euxo pipefail
+# TODO(WAN): This didn't work for getting core dumps out of PG.
+# echo '/tmp/core.%h.%e.%t' | sudo tee /proc/sys/kernel/core_pattern
 
-# TODO(WAN): I'd personally prefer it on the container, but eh.
-echo '/tmp/core.%h.%e.%t' | sudo tee /proc/sys/kernel/core_pattern
+set -euxo pipefail
 
 IS_DEV_MACHINE=0
 if [[ "$(hostname --all-fqdns)" == *"db.pdl.local.cmu.edu"* ]]; then
@@ -25,10 +25,22 @@ fi
 export HOSTNAME=$(hostname)
 
 sudo apt install make gcc
+
+./setup/dsb/dsb_sf1.sh
+./setup/dsb/dsb_schema.sh
+./setup/dsb/dsb_queries.sh
+
 ./setup/tpch/tpch_sf1.sh
 ./setup/tpch/tpch_sf10.sh
 ./setup/tpch/tpch_schema.sh
 ./setup/tpch/tpch_queries.sh
+
+if docker volume inspect trainer_db; then
+  echo "Volume 'trainer_db' exists."
+else
+  echo "Volume 'trainer_db' doesn't exist, creating."
+  docker volume create trainer_db
+fi
 
 docker compose down --remove-orphans
 docker compose --profile gym --profile nyoom build

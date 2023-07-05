@@ -12,6 +12,45 @@ class Workload(ABC):
         self.queries: list[str] = queries
 
 
+class WorkloadDSB(Workload):
+    def __init__(self, config, seed):
+        self._config = config
+        self._seed = seed
+        queries = []
+        seed_path = Path(f"/dsb_queries/{config}/{seed}/")
+        for sql_path in sorted(seed_path.glob("*.sql"), key=lambda s: str(s).split("-")):
+            with open(sql_path) as f:
+                contents = "".join([line for line in f if not line.startswith("--") and not len(line.strip()) == 0])
+                for sql in pglast.split(contents):
+                    queries.append(sql)
+        super().__init__(queries)
+
+    def __str__(self):
+        return f"[DSB-{self._seed}]"
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class WorkloadTPCH(Workload):
+    def __init__(self, seed):
+        self._seed = seed
+        queries = []
+        seed_path = Path(f"/tpch_queries/{seed}/")
+        for i in range(1, 22 + 1):
+            with open(seed_path / f"{i}.sql") as f:
+                contents = "".join([line for line in f if not line.startswith("--") and not len(line.strip()) == 0])
+                for sql in pglast.split(contents):
+                    queries.append(sql)
+        super().__init__(queries)
+
+    def __str__(self):
+        return f"[TPCH-{self._seed}]"
+
+    def __repr__(self):
+        return self.__str__()
+
+
 class WorkloadTPCH(Workload):
     def __init__(self, seed):
         self._seed = seed

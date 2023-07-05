@@ -42,23 +42,34 @@ def get_nyoom_dir() -> Path:
 
 @nyoom_flask.route("/start/", methods=["POST"])
 def start():
-    db_port = int(os.getenv("TRAINER_PG_PORT"))
-
-    method = "tskip"
-    tskip_wiggle_std = 2.0
-    tskip_wiggle_sampen = 20
-    optimizer_cutoff_pct = 10
-    optimizer_min_processed = 0
+    db_name = None
+    db_port = None
+    method = None  # "tskip"
+    tskip_wiggle_std = None  # 2.0
+    tskip_wiggle_sampen = None  # 20
+    optimizer_cutoff_pct = None  # 10
+    optimizer_min_processed = None  # 0
 
     req_json = request.get_json(silent=True)
-    if req_json is not None:
-        method = req_json.get("method", method)
-        tskip_wiggle_std = req_json.get("tskip_wiggle_std", tskip_wiggle_std)
-        tskip_wiggle_sampen = req_json.get("tskip_wiggle_sampen", tskip_wiggle_sampen)
-        optimizer_cutoff_pct = req_json.get("optimizer_cutoff_pct", optimizer_cutoff_pct)
-        optimizer_min_processed = req_json.get("optimizer_min_processed", optimizer_min_processed)
+    try:
+        db_name = req_json.get("db_name")
+        db_port = int(req_json.get("db_port"))
+        db_pass = req_json.get("db_pass")
+        db_user = req_json.get("db_user")
+        method = req_json.get("method")
+        if method == "tskip":
+            tskip_wiggle_std = req_json.get("tskip_wiggle_std")
+            tskip_wiggle_sampen = req_json.get("tskip_wiggle_sampen")
+        elif method == "optimizer":
+            optimizer_cutoff_pct = req_json.get("optimizer_cutoff_pct")
+            optimizer_min_processed = req_json.get("optimizer_min_processed")
+    except Exception:
+        return f"Bad request: {req_json=}", 400
 
-    startup_args = ["-u", "-m", "nyoom", "--method", f"{method}"]
+    startup_args = ["-u", "-m", "nyoom",
+                    "--db_name", db_name, "--db_port", db_port,
+                    "--db_user", db_user, "--db_pass", db_pass,
+                    "--method", f"{method}"]
     suffix = f"{method}"
     if method == "tskip":
         startup_args.extend(
@@ -125,7 +136,12 @@ def start():
 
 @nyoom_flask.route("/stop/", methods=["POST"])
 def stop():
-    db_port = int(os.getenv("TRAINER_PG_PORT"))
+    req_json = request.get_json(silent=True)
+    try:
+        db_port = req_json.get("db_port")
+    except Exception:
+        return f"Bad request: {req_json=}", 400
+
     query = db.select(NyoomInstance).where(NyoomInstance.port == db_port)
     instance: Optional[NyoomInstance] = db.session.execute(query).scalar_one_or_none()
     if instance is None or instance.pid is None:

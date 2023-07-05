@@ -8,6 +8,7 @@ def create_app(config=Config):
     app = Flask(__name__)
     app.config.from_object(config)
     app.config["TRAINER_DIR"].mkdir(parents=True, exist_ok=True)
+    app.config["TRAINER_DB_DIR"].mkdir(parents=True, exist_ok=True)
     db.init_app(app)
 
     from trainer.model.instance import TrainerInstance
